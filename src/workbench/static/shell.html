@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>jura.sh workbench</title>
+<link rel="stylesheet" href="/static/fonts.css">
+<style>
+
+/* Light (paper) and dark (slate) tokens from the jura website. */
+:root {
+  --bg: hsl(36,24%,97%); --nav: hsl(36,20%,94%); --panel: hsl(36,30%,99%); --sunk: hsl(36,18%,93%);
+  --line: hsl(30,10%,86%); --ink: hsl(222,18%,22%); --muted: hsl(222,9%,40%);
+  --accent: hsl(214,40%,40%); --accent-low: hsl(214,32%,91%); --on-accent: hsl(36,24%,98%);
+  --warn: hsl(32,85%,40%); --err: hsl(4,65%,40%);
+  --sans: 'Source Sans 3', system-ui, sans-serif; --mono: 'JetBrains Mono', ui-monospace, monospace; --sans-weight: 400;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --bg: hsl(222,16%,11%); --nav: hsl(222,18%,8%); --panel: hsl(222,16%,14%); --sunk: hsl(222,18%,9%);
+    --line: hsl(222,12%,21%); --ink: hsl(210,16%,86%); --muted: hsl(215,10%,62%);
+    --accent: hsl(214,38%,62%); --accent-low: hsl(214,28%,19%); --on-accent: hsl(222,18%,9%);
+    --warn: hsl(36,80%,60%); --err: hsl(4,80%,70%);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: hsl(222,16%,11%); --nav: hsl(222,18%,8%); --panel: hsl(222,16%,14%); --sunk: hsl(222,18%,9%);
+  --line: hsl(222,12%,21%); --ink: hsl(210,16%,86%); --muted: hsl(215,10%,62%);
+  --accent: hsl(214,38%,62%); --accent-low: hsl(214,28%,19%); --on-accent: hsl(222,18%,9%);
+  --warn: hsl(36,80%,60%); --err: hsl(4,80%,70%);
+  color-scheme: dark;
+}
+/* evening: a subdued gruvbox — warm dark ground, soft foreground, low-key accents */
+:root[data-theme="evening"] {
+  --bg: #282828; --nav: #1d2021; --panel: #32302f; --sunk: #1d2021;
+  --line: #3c3836; --ink: #d5c4a1; --muted: #928374;
+  --accent: #83a598; --accent-low: #3c3836; --on-accent: #282828;
+  --warn: #d79921; --err: #cc241d;
+  color-scheme: dark;
+}
+/* legal: paper-white and formal, set in a book serif */
+:root[data-theme="legal"] {
+  --bg: #fbfbf8; --nav: #f1f0e9; --panel: #ffffff; --sunk: #f0efe7;
+  --line: #dcdbd0; --ink: #1c1c1a; --muted: #56544a;
+  --accent: #2a3b52; --accent-low: #e7eaef; --on-accent: #fbfbf8;
+  --warn: #8a6d1f; --err: #8a2b2b;
+  --sans: 'Source Serif 4', Georgia, serif; --sans-weight: 400;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.45 var(--sans); font-weight: var(--sans-weight); display: flex; flex-direction: column; overflow: hidden; }
+button, input, select { font: inherit; color: inherit; }
+.btn { min-height: 34px; padding: 0 12px; border: 1px solid var(--line); background: var(--panel); border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+.mono { font-family: var(--mono); }
+
+header { background: var(--nav); border-bottom: 1px solid var(--line); padding: 0 20px; flex: none; }
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; min-height: 58px; padding: 6px 0; }
+.mark { font-family: var(--mono); font-size: 21px; font-weight: 500; letter-spacing: -0.01em; }
+.mark span, .slash { color: var(--muted); }
+.slash { font-size: 21px; font-weight: 300; }
+#casebtn { min-height: 42px; font-size: 16px; font-weight: 600; gap: 10px; }
+#casebtn .mono { font-size: 13px; font-weight: 400; color: var(--muted); }
+.picker { position: relative; }
+#casemenu { position: absolute; top: 48px; left: 0; z-index: 20; width: 360px; padding: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px hsla(222,30%,10%,.16); }
+.mi { width: 100%; display: flex; justify-content: space-between; gap: 16px; align-items: center; min-height: 42px; padding: 0 12px; border: 0; background: none; border-radius: 6px; cursor: pointer; text-align: left; }
+.mi:hover, .mi.on { background: var(--accent-low); }
+.mi .mono { font-size: 12px; color: var(--muted); }
+#newcase { border-top: 1px solid var(--line); margin-top: 6px; padding: 8px 6px 4px; display: grid; gap: 6px; }
+#newcase input { border: 1px solid var(--line); background: var(--bg); border-radius: 6px; min-height: 34px; padding: 0 10px; }
+.spacer { flex: 1; }
+#needs { color: var(--err); }
+.alpha { font: 700 10.5px var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--warn); border: 1px solid currentColor; border-radius: 999px; padding: 0 7px; line-height: 17px; cursor: pointer; background: none; }
+#helpbtn { min-width: 34px; padding: 0; justify-content: center; font-weight: 600; }
+#about { width: min(34rem, calc(100vw - 32px)); padding: 22px 24px 18px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 36px hsla(222,30%,10%,.22); }
+#about::backdrop { background: hsla(222,30%,10%,.35); }
+#about h2 { margin: 0 0 2px; font-size: 19px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+#about .ver { font-size: 12px; color: var(--muted); }
+#about p { margin: 12px 0 0; }
+#about dl { margin: 12px 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; }
+#about ul { margin: 6px 0 0; padding-left: 20px; display: grid; gap: 3px; }
+#about li b { font-weight: 600; }
+#about li span { color: var(--muted); }
+#about dt { font-weight: 600; }
+#about dd { margin: 0; color: var(--muted); }
+#about .note { color: var(--muted); font-size: 13.5px; border-left: 2px solid var(--warn); padding-left: 10px; }
+#about form { display: flex; justify-content: flex-end; margin-top: 16px; }
+#theme { border: 1px solid var(--line); background: var(--panel); border-radius: 6px; min-height: 34px; padding: 0 8px; }
+nav { display: flex; align-items: center; gap: 2px; overflow-x: auto; margin: 0 -16px; padding-right: 12px; }
+.ptoggles { display: inline-flex; flex: none; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.ptoggles button { border: 0; border-radius: 0; background: var(--panel); color: var(--muted); font: 600 13px var(--sans); min-height: 30px; padding: 0 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.ptoggles button + button { border-left: 1px solid var(--line); }
+.ptoggles button:hover { color: var(--ink); }
+.ptoggles button.on { background: var(--accent-low); color: var(--ink); }
+.ptoggles .qn { font-size: 10.5px; font-weight: 700; background: var(--warn); color: var(--on-accent); border-radius: 999px; min-width: 16px; padding: 0 5px; line-height: 16px; text-align: center; }
+#agents { flex: none; margin-left: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--muted); font: 600 13px var(--sans); min-height: 30px; padding: 0 8px; cursor: pointer; }
+#agents:hover { color: var(--ink); border-color: var(--accent); }
+.tab { font-size: 16px; font-weight: 600; color: var(--muted); background: none; border: 0; border-bottom: 2px solid transparent; min-height: 44px; padding: 0 16px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.tab:hover { color: var(--ink); }
+.tab.on { color: var(--ink); border-bottom-color: var(--ink); }
+.kind { font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--muted); }
+.badge { font-size: 11px; font-weight: 700; background: var(--warn); color: var(--on-accent); border-radius: 999px; padding: 0 6px; line-height: 17px; }
+
+main { flex: 1; position: relative; min-height: 0; }
+.pane { position: absolute; inset: 0; }
+.pane iframe { width: 100%; height: 100%; border: 0; display: block; background: var(--bg); }
+.wait { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--muted); text-align: center; padding: 24px; }
+.wait b { color: var(--ink); font-weight: 600; }
+.wait .err { color: var(--err); font-family: var(--mono); font-size: 13px; max-width: 60ch; white-space: pre-wrap; }
+#empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+#empty .card { max-width: 30rem; text-align: center; display: grid; gap: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <div class="mark">jura<span>.sh</span></div>
+    <button type="button" class="alpha" id="alpha" title="Alpha prototype: About">alpha</button>
+    <button type="button" class="alpha" id="needs" title="A tool the workbench needs is missing or too old: About" hidden>update</button>
+    <span class="slash" aria-hidden="true">/</span>
+    <div class="picker">
+      <button class="btn" id="casebtn" aria-haspopup="listbox" aria-expanded="false"><span id="casename">No case</span><span class="mono" id="caseid"></span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+      <div id="casemenu" role="listbox" aria-label="Cases" hidden>
+        <div id="caselist"></div>
+        <form id="newcase">
+          <input id="nc-id" placeholder="Case id, e.g. 2026-015" required pattern="[A-Za-z0-9][A-Za-z0-9._\-]{0,63}" aria-label="Case id">
+          <input id="nc-name" placeholder="Name, e.g. Tenancy dispute" aria-label="Case name">
+          <button class="btn primary" type="submit">+ New case</button>
+        </form>
+      </div>
+    </div>
+    <span class="spacer"></span>
+    <label class="kind" for="theme">theme</label>
+    <select id="theme" aria-label="Theme"><option value="system">system</option><option value="light">light</option><option value="dark">dark</option><option value="evening">evening</option><option value="legal">legal</option></select>
+    <button type="button" class="btn" id="helpbtn" aria-haspopup="dialog" aria-label="About and help" title="About and help">?</button>
+  </div>
+  <nav aria-label="Workbench">
+    <button class="tab" data-tab="write">Write <span class="kind">agent</span></button>
+    <button class="tab" data-tab="evid" title="evid: documents, labels and search">Datasets <span class="kind">app</span></button>
+    <button class="tab" data-tab="did" title="did: create sets and add documents. They live outside this case. Connect a set from Write; Hand off writes its PDFs into the case.">Anonymization <span class="kind">app</span><span class="badge" id="b-did" hidden></span></button>
+    <span class="spacer"></span>
+    <span class="ptoggles" id="panes" role="group" aria-label="Panes" hidden>
+      <button type="button" data-pane="skills" aria-pressed="false" title="The skills this case's agents can load">Skillset</button>
+      <button type="button" data-pane="queue" aria-pressed="false" title="Your new edits and annotations, to roll to an agent">Queue<span class="qn" id="qcount" hidden></span></button>
+    </span>
+    <select id="agents" aria-label="Start an agent" title="Start a harness in the Write pane" hidden></select>
+  </nav>
+</header>
+<dialog id="about" aria-labelledby="about-h">
+  <h2 id="about-h">jura.sh workbench <span class="alpha" aria-hidden="true">alpha</span></h2>
+  <div class="ver mono" id="about-ver"></div>
+  <div class="note" id="about-needs" hidden><b>Install or update before you rely on this window:</b><ul></ul><span class="kind">`jura doctor` lists every tool it uses.</span></div>
+  <p>A prototype legal engineering workbench: one window per legal case, where you write the case with agents, next to its evidence and its anonymization.</p>
+  <p>It makes bids on five open problems:</p>
+  <ul>
+    <li><b>Accurate quoting and citing.</b> <span>Quotes are the source's own bytes, from labelled evid snippets, never model wording.</span></li>
+    <li><b>Local and frontier models together.</b> <span>Local models handle the personal data. Frontier models only see the anonymized case.</span></li>
+    <li><b>Annotation above the document level.</b> <span>Notes on the case tree's folders and files as well as its lines, queued to agents.</span></li>
+    <li><b>Automatic version tracking.</b> <span>Every change is committed in the background. Tag a state to mark it.</span></li>
+    <li><b>Multi-harness collaboration.</b> <span>Several agent harnesses (claude, codex, opencode, …) work side by side on one case.</span></li>
+  </ul>
+  <dl>
+    <dt>Write</dt><dd>The case workdir: edit and annotate files, a Typst editor with live preview, and sandboxed terminals for agents. Every change is committed.</dd>
+    <dt>Datasets</dt><dd>evid: documents, labels and search.</dd>
+    <dt>Anonymization</dt><dd>did: the raw case files stay here, outside the case. Only the anonymized PDFs reach the case.</dd>
+  </dl>
+  <p class="note">This is an alpha prototype. Features, file formats and behaviour will change, and things will break. Keep your own backups, and review everything an agent writes before you rely on it. The workbench gives no legal advice.</p>
+  <p class="kind">Ctrl+PageDown / Ctrl+PageUp cycles the tabs. Ctrl+W or Ctrl+Q quits the window.</p>
+  <form method="dialog"><button class="btn primary" autofocus>Close</button></form>
+</dialog>
+<main>
+  <div id="empty" hidden><div class="card"><b>No case yet</b><span>Create one from the case menu. Each case is a git-tracked workdir. Personal files stay in ~/did_workdirs, which is not inside the case.</span></div></div>
+  <section class="pane" id="p-write" hidden></section>
+  <section class="pane" id="p-evid" hidden></section>
+  <section class="pane" id="p-did" hidden></section>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+const S = { state: null, tab: 'write', frames: {}, origins: {}, theme: 'system' };
+const store = (k, v) => { try { localStorage.setItem('wb.' + k, JSON.stringify(v)); } catch (e) {} };
+const load = (k, d) => { try { const v = localStorage.getItem('wb.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } };
+
+async function api(method, path, body) {
+  const r = await fetch(path, { method, headers: body ? { 'Content-Type': 'application/json', 'X-Workbench': '1' } : { 'X-Workbench': '1' }, body: body ? JSON.stringify(body) : undefined });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || r.statusText);
+  return data;
+}
+
+// ---------- theme ----------
+function resolved() {  // the concrete theme a child should render
+  if (S.theme === 'system') return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  return S.theme;  // light | dark | evening | legal
+}
+function applyTheme() {
+  if (S.theme === 'system') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.dataset.theme = S.theme;
+  $('#theme').value = S.theme;
+  for (const [tab, f] of Object.entries(S.frames)) postTheme(tab, f);
+}
+// evid and did know only light and dark. They get the whole theme as data, read off this page's
+// own CSS (the one place the themes are defined): the base scheme, the core colours and the fonts.
+const TOKENS = ['bg', 'nav', 'panel', 'sunk', 'line', 'ink', 'muted', 'accent', 'accent-low', 'on-accent', 'warn', 'err'];
+const scheme = () => getComputedStyle(document.documentElement).colorScheme === 'dark' ? 'dark' : 'light';
+function themeMessage() {
+  const cs = getComputedStyle(document.documentElement), v = n => cs.getPropertyValue('--' + n).trim();
+  return {
+    type: 'workbench-theme', theme: resolved(), scheme: scheme(),
+    tokens: Object.fromEntries(TOKENS.map(n => [n, v(n)])),
+    fonts: { css: new URL('/static/fonts.css', location.href).href, sans: v('sans'), weight: v('sans-weight'), mono: v('mono') },
+  };
+}
+function postTheme(tab, f) {
+  if (f && f.contentWindow && S.origins[tab]) f.contentWindow.postMessage(themeMessage(), S.origins[tab]);
+}
+$('#theme').onchange = e => { S.theme = e.target.value; store('theme', S.theme); applyTheme(); };
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (S.theme === 'system') applyTheme(); });
+
+// ---------- cases ----------
+function current() { return S.state && S.state.cases.find(c => c.id === S.state.current); }
+function renderCases() {
+  const c = current();
+  $('#casename').textContent = c ? c.name : 'No case';
+  $('#caseid').textContent = c ? c.id : '';
+  $('#empty').hidden = !!c;
+  const list = $('#caselist'); list.textContent = '';
+  for (const k of S.state.cases) {
+    const b = document.createElement('button');
+    b.className = 'mi' + (c && k.id === c.id ? ' on' : ''); b.setAttribute('role', 'option');
+    b.setAttribute('aria-selected', String(!!c && k.id === c.id));
+    b.innerHTML = '<span></span><span class="mono"></span>';
+    b.firstChild.textContent = k.name; b.lastChild.textContent = k.id;
+    b.onclick = () => selectCase(k.id);
+    list.append(b);
+  }
+}
+function menu(open) { $('#casemenu').hidden = !open; $('#casebtn').setAttribute('aria-expanded', String(open)); }
+$('#casebtn').onclick = e => { e.stopPropagation(); menu($('#casemenu').hidden); };
+document.addEventListener('click', e => { if (!e.target.closest('.picker')) menu(false); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') menu(false);
+  if (tabKey(e)) { e.preventDefault(); cycle(e.key === 'PageDown' ? 1 : -1); return; }
+  const k = e.key.toLowerCase();  // Ctrl+W / Ctrl+Q quit the window (Cmd on macOS)
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (k === 'q' || k === 'w')) { e.preventDefault(); quit(); }
+});
+function about() {
+  $('#about-ver').textContent = 'version ' + ((S.state && S.state.version) || '?');
+  const needs = (S.state && S.state.problems) || [];
+  $('#about-needs').hidden = !needs.length;
+  $('#about-needs ul').replaceChildren(...needs.map(t => Object.assign(document.createElement('li'), { textContent: t })));
+  if (!$('#about').open) $('#about').showModal();
+}
+$('#helpbtn').onclick = about;
+$('#alpha').onclick = about;
+$('#needs').onclick = about;
+$('#about').onclick = e => {  // a click outside the box (on the backdrop) closes it
+  const r = $('#about').getBoundingClientRect();
+  if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) $('#about').close();
+};
+function quit() {
+  api('POST', '/api/quit').catch(() => {}).finally(() => window.close());
+}
+$('#newcase').onsubmit = async e => {
+  e.preventDefault();
+  try {
+    S.state = await api('POST', '/api/case/new', { id: $('#nc-id').value.trim(), name: $('#nc-name').value.trim() });
+    $('#nc-id').value = $('#nc-name').value = '';
+    menu(false); caseChanged();
+  } catch (err) { alert(err.message); }
+};
+async function selectCase(id) {
+  menu(false);
+  try { S.state = await api('POST', '/api/case/select', { id }); store('case', id); caseChanged(); }
+  catch (err) { alert(err.message); }
+}
+function caseChanged() {
+  renderCases();
+  // Write and evid are per case (Write's workdir, evid's set); drop their frames so each reloads
+  // for the new case. did carries no per-case state, so it stays. The child servers stay up.
+  for (const t of ['write', 'evid']) if (S.frames[t]) { S.frames[t].remove(); delete S.frames[t]; }
+  $('#agents').textContent = '';
+  show(S.tab);
+}
+
+// ---------- tabs ----------
+function show(tab) {
+  if (tab !== 'write' && tab !== 'evid' && tab !== 'did') tab = 'write';
+  S.tab = tab; store('tab', tab);
+  document.querySelectorAll('.tab').forEach(b => { b.classList.toggle('on', b.dataset.tab === tab); b.setAttribute('aria-current', b.dataset.tab === tab ? 'page' : 'false'); });
+  const c = current();
+  $('#panes').hidden = tab !== 'write' || !c;
+  $('#agents').hidden = tab !== 'write' || !c || $('#agents').options.length <= 1;
+  for (const t of ['write', 'evid', 'did']) $('#p-' + t).hidden = !c || t !== tab;
+  if (!c) return;
+  if (!S.frames[tab]) mount(tab, c);
+}
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => show(b.dataset.tab));
+const TABS = ['write', 'evid', 'did'];
+function cycle(step) {  // Ctrl+PageDown / Ctrl+PageUp, here or forwarded by a child
+  show(TABS[(TABS.indexOf(S.tab) + step + TABS.length) % TABS.length]);
+  if (S.frames[S.tab]) S.frames[S.tab].focus();  // so the next press reaches the new tab
+}
+const tabKey = e => e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && (e.key === 'PageUp' || e.key === 'PageDown');
+
+async function mount(tab, c) {
+  const pane = $('#p-' + tab);
+  const label = { write: 'Write', evid: 'Datasets (evid)', did: 'Anonymization (did)' }[tab];
+  pane.innerHTML = `<div class="wait"><b>Starting ${label}…</b></div>`;
+  let r;
+  try { r = await api('GET', `/api/tab?tab=${tab}&case=${encodeURIComponent(c.id)}`); }
+  catch (err) { r = { error: err.message }; }
+  if (current() !== c) return;  // the case changed while the child was starting
+  if (!r.url) {
+    pane.innerHTML = `<div class="wait"><b>${label} did not start</b><span class="err"></span><button class="btn">Retry</button></div>`;
+    pane.querySelector('.err').textContent = r.error || 'no URL';
+    pane.querySelector('button').onclick = () => mount(tab, c);
+    return;
+  }
+  const u = new URL(r.url);
+  u.searchParams.set('theme', tab === 'write' ? resolved() : scheme());  // Write has every theme; the others get the rest by message
+  // Both children hide their own agent pane: the Write tab owns the terminals.
+  u.searchParams.set('embed', '1');
+  if (tab === 'evid' && c.evidSet) u.searchParams.set('set', c.evidSet);
+  const f = document.createElement('iframe');
+  f.title = label; f.src = u.href;
+  f.setAttribute('allow', 'clipboard-read; clipboard-write');
+  f.onload = () => postTheme(tab, f);
+  S.origins[tab] = u.origin; S.frames[tab] = f;
+  pane.textContent = ''; pane.append(f);
+}
+
+// Children tell us about badges (did: documents waiting for review) and ask for the theme.
+window.addEventListener('message', e => {
+  const tab = Object.keys(S.origins).find(t => S.origins[t] === e.origin);
+  if (!tab || !e.data || typeof e.data !== 'object') return;
+  if (e.data.type === 'workbench-badge' && tab === 'did') {
+    const n = Number(e.data.count) || 0, b = $('#b-did');
+    b.hidden = n <= 0; b.textContent = String(n);
+  } else if (e.data.type === 'workbench-hello') postTheme(tab, S.frames[tab]);
+  else if (e.data.type === 'workbench-quit') quit();
+  else if (e.data.type === 'workbench-tab') cycle(Number(e.data.step) < 0 ? -1 : 1);
+  else if (e.data.type === 'workbench-panes' && tab === 'write') applyPanes(e.data);
+  else if (e.data.type === 'workbench-agents' && tab === 'write') applyAgents(e.data);
+});
+const PANE_LABEL = { skills: ['Skillset', 'Hide skillset'], queue: ['Queue', 'Hide queue'] };
+function applyPanes(d) {
+  for (const name of ['skills', 'queue']) {
+    const b = $('#panes').querySelector(`[data-pane="${name}"]`);
+    const on = !!d[name];
+    b.setAttribute('aria-pressed', String(on));
+    b.classList.toggle('on', on);
+    b.firstChild.textContent = PANE_LABEL[name][on ? 1 : 0];
+  }
+  const n = Number(d.queueCount) || 0, c = $('#qcount');
+  c.hidden = n <= 0; c.textContent = String(n);
+}
+function applyAgents(d) {
+  const sel = $('#agents');
+  sel.textContent = '';
+  const ph = document.createElement('option');
+  ph.value = ''; ph.textContent = 'Agent…'; sel.append(ph);
+  for (const a of (Array.isArray(d.agents) ? d.agents : [])) {
+    if (!a || !a.name) continue;
+    const o = document.createElement('option');
+    o.textContent = a.name;
+    o.title = a.tip || a.name;
+    o.dataset.command = a.command || '';
+    o.dataset.name = a.name;
+    if (a.missing) { o.disabled = true; o.textContent += ' (not installed)'; }
+    sel.append(o);
+  }
+  sel.selectedIndex = 0;
+  sel.hidden = S.tab !== 'write' || !current() || sel.options.length <= 1;
+}
+$('#panes').onclick = e => {
+  const b = e.target.closest('button');
+  const f = S.frames.write;
+  if (!b || !f || !S.origins.write) return;
+  f.contentWindow.postMessage({ type: 'workbench-pane', name: b.dataset.pane }, S.origins.write);
+};
+$('#agents').onchange = e => {
+  const sel = e.target, i = sel.selectedIndex;
+  if (i <= 0) return;  // the placeholder
+  const command = sel.options[i].dataset.command || '', name = sel.options[i].dataset.name || '';
+  sel.selectedIndex = 0;
+  const f = S.frames.write;
+  if (f && S.origins.write) f.contentWindow.postMessage({ type: 'workbench-agent', command, name }, S.origins.write);
+};
+
+// The server checks evid, did, typst, git and bwrap once at startup (null until it has).
+async function needs() {
+  while (S.state.problems == null) {
+    await new Promise(r => setTimeout(r, 1500));
+    S.state.problems = (await api('GET', '/api/state')).problems;
+  }
+  $('#needs').hidden = !S.state.problems.length;
+}
+
+// ---------- start ----------
+(async () => {
+  S.theme = load('theme', 'system'); applyTheme();
+  S.state = await api('GET', '/api/state');
+  const want = load('case', null);
+  if (want && want !== S.state.current && S.state.cases.some(c => c.id === want)) S.state = await api('POST', '/api/case/select', { id: want });
+  else if (S.state.current) S.state = await api('POST', '/api/case/select', { id: S.state.current });
+  renderCases();
+  show(load('tab', 'write'));
+  needs();
+})().catch(err => { document.body.insertAdjacentHTML('beforeend', `<pre class="mono" style="color:var(--err);padding:16px"></pre>`); document.body.lastChild.textContent = err.stack || err.message; });
+</script>
+</body>
+</html>

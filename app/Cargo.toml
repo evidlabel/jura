@@ -1,0 +1,19 @@
+[package]
+name = "workbench-app"
+version = "0.1.0-alpha.1"
+description = "jura workbench in a native window"
+edition = "2021"
+license = "MIT"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18.2"
+
+[profile.release]
+strip = true
+lto = true

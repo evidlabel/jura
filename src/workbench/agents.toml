@@ -1,0 +1,46 @@
+# Harnesses the Write tab can open. A button appears when `bin` is on PATH
+# (default: the first word of `command`). `command` is typed into the login shell.
+# An empty command is the shell itself and is always offered.
+# $WORKBENCH_AGENTS, or ~/.config/workbench/agents.toml, replaces this file.
+# Codex is listed so it appears once `codex` is installed.
+#
+# One harness may be listed several times, once per config: a local model and a
+# global one are two rows. An optional `env` table is set on that command only, so
+# OpenCode can be pointed at a saved profile without a wrapper:
+#
+#   [[agent]]
+#   name = "OpenCode · local"
+#   command = "opencode --standalone"  # its own server: the background one keeps its config
+#   bin = "opencode"
+#   title = "Qwen3.8 on the GB10"
+#   env = { OPENCODE_CONFIG = "~/.config/opencode/profiles/local-qw38.json" }
+
+[[agent]]
+name = "OpenCode"
+command = "opencode"
+bin = "opencode"
+
+[[agent]]
+name = "Hermes"
+command = "hermes chat"
+bin = "hermes"
+
+[[agent]]
+name = "Codex"
+command = "codex"
+bin = "codex"
+
+[[agent]]
+name = "Claude"
+command = "claude"
+bin = "claude"
+
+[[agent]]
+name = "Grok"
+command = "grok"
+bin = "grok"
+title = "Grok Build"
+
+[[agent]]
+name = "shell"
+command = ""

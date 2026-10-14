@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+app/target/
+app/gen/
+Makefile
+notes/
+app/Cargo.lock
+AGENTS.md
+CLAUDE.md

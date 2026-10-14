@@ -1,0 +1,22 @@
+# Directories the Skillset reads when a case omits skills.dirs. Each is a tree
+# of skills: a folder with a SKILL.md is one skill, and the pane does not walk
+# the rest of that folder's tree. A missing directory is skipped.
+# A case's workbench.yml skills.dirs replaces this list for that case.
+# $WORKBENCH_SKILLS replaces either list with one directory.
+# ~/.config/workbench/skills.toml replaces this file when it exists.
+
+[[dir]]
+name = "claude"
+path = "~/.claude/skills"
+
+[[dir]]
+name = "grok"
+path = "~/.grok/skills"
+
+[[dir]]
+name = "hermes"
+path = "~/.hermes/skills"
+
+[[dir]]
+name = "codex"
+path = "~/.codex/skills"
