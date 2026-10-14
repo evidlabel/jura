@@ -1,3 +1,5 @@
+[![CI](https://github.com/evidlabel/jura/actions/workflows/ci.yml/badge.svg)](https://github.com/evidlabel/jura/actions/workflows/ci.yml)[![Version](https://img.shields.io/github/v/tag/evidlabel/jura?include_prereleases&sort=semver&label=version)](https://github.com/evidlabel/jura/tags)![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)![Platform](https://img.shields.io/badge/platform-Linux-lightgrey.svg)[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)[![Website](https://img.shields.io/badge/web-jura.sh-1f6feb.svg)](https://jura.sh/workbench/)
+
 # jura workbench
 
 One window for a legal case: write it with agents, next to its datasets and its
