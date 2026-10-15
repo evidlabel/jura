@@ -9,6 +9,7 @@ from pathlib import Path
 from treeparse import argument, cli, command, group, option
 
 from . import __version__, cases
+from .templates import TEMPLATES
 from .write import core as write
 
 
@@ -18,9 +19,9 @@ def open_window(port: int, browser: bool, headless: bool, agent: str) -> None:
     serve(port=port, browser=browser, headless=headless, agent=agent)
 
 
-def case_new(id: str, name: str) -> None:
+def case_new(id: str, name: str, template: str) -> None:
     try:
-        c = cases.create(id, name or id)
+        c = cases.create(id, name, template)
     except (ValueError, FileExistsError) as e:
         sys.exit(f"workbench: {e}")
     print(f"{c.id}  {c.workdir}\n  did  {cases.did_root()}")
@@ -81,6 +82,25 @@ def compile_doc(path: str) -> None:
 
 def doctor() -> None:
     """Every tool the workbench runs: where it is, its version, and what is wrong. Exit 1 if a required one is."""
+    if not _doctor_table():
+        print("\n`jura setup` installs what is missing or too old (it asks before each step).")
+        sys.exit(1)
+
+
+def setup(yes: bool, dry_run: bool, languages: str) -> None:
+    """Install what doctor finds missing, asking first; then doctor's table."""
+    from . import setup as setup_
+
+    setup_.run(yes=yes, dry_run=dry_run, languages=languages)
+    print()
+    ok = _doctor_table()
+    print("\nNext: jura open" if ok else "\nStill missing: see the rows marked !! above, or " + setup_.START)
+    if not ok and not dry_run:
+        sys.exit(1)
+
+
+def _doctor_table() -> bool:
+    """Print doctor's rows. False if a required tool is missing or too old."""
     from . import requires
     from .server import find_app
     from .write.preview import find_tinymist
@@ -97,8 +117,7 @@ def doctor() -> None:
     for name, without in requires.OPTIONAL.items():
         path = found[name]()
         print(f"{'ok' if path else '--'}  {name:<14} {'-':<8} {path or f'not found ({without})'}")
-    if bad:
-        sys.exit(1)
+    return not bad
 
 
 def case_ls(format: str) -> None:
@@ -147,7 +166,16 @@ app = cli(
                     callback=case_new,
                     arguments=[
                         argument(name="id", arg_type=str, help="case id, e.g. 2026-014"),
-                        argument(name="name", arg_type=str, nargs="?", default="", help="display name"),
+                        argument(name="name", arg_type=str, nargs="?", default="", help="display name (default: the template's, else the id)"),
+                    ],
+                    options=[
+                        option(
+                            flags=["--template", "-t"],
+                            arg_type=str,
+                            default="blank",
+                            choices=list(TEMPLATES),
+                            help="what main.typ, the case map, starts with: a plain question to correct",
+                        )
                     ],
                 ),
                 command(
@@ -188,6 +216,16 @@ app = cli(
             name="doctor",
             help="Check the tools the workbench runs (evid, did, typst, git, bwrap; tinymist and workbench-app optional). Exit 1 if one is missing or too old.",
             callback=doctor,
+        ),
+        cli(
+            name="setup",
+            help="Install what doctor finds missing or too old: evid and did (uv), git and bwrap (your package manager, with sudo), typst and tinymist (~/.local/bin), did's language models. Asks before each step.",
+            callback=setup,
+            options=[
+                option(flags=["--yes", "-y"], flag=True, help="run every step without asking, except the ones that need sudo (printed instead)"),
+                option(flags=["--dry-run", "-n"], flag=True, help="only print the steps"),
+                option(flags=["--languages", "-l"], arg_type=str, default="", help="did's model languages, e.g. 'da en' (default: asked; da en)"),
+            ],
         ),
         write.app,
     ],

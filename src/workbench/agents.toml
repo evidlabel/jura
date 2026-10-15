@@ -12,8 +12,8 @@
 #   name = "OpenCode · local"
 #   command = "opencode --standalone"  # its own server: the background one keeps its config
 #   bin = "opencode"
-#   title = "Qwen3.8 on the GB10"
-#   env = { OPENCODE_CONFIG = "~/.config/opencode/profiles/local-qw38.json" }
+#   title = "OpenCode on a local model"
+#   env = { OPENCODE_CONFIG = "~/.config/opencode/profiles/local.json" }
 
 [[agent]]
 name = "OpenCode"

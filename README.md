@@ -46,17 +46,29 @@ Raw case files carry personal data. They stay in the did set, outside the case, 
 ## Install (alpha, Linux)
 
 ```sh
+curl -LsSf https://jura.sh/install.sh | sh
+```
+
+That installs uv if it is missing, then evid, did and the workbench as uv tools, then runs
+`jura setup`. Setup installs what is still missing and asks before each step: `typst` and
+`tinymist` (live preview) into `~/.local/bin`, `git` and `bwrap` (bubblewrap) with your
+package manager (sudo, asked separately), and did's language models. Agent harnesses
+(`claude`, `codex`, `grok`, `opencode`, …) for the Write terminals are your own install.
+
+By hand:
+
+```sh
 uv tool install "evid @ git+https://github.com/evidlabel/evid"                 # 0.8.0 or newer
 uv tool install --python 3.12 "did[gui,models] @ git+https://github.com/evidlabel/did"   # 0.3.2 or newer
 uv tool install "jura-workbench @ git+https://github.com/evidlabel/jura"
-jura doctor          # every tool it runs, with what is missing or too old
+jura setup           # or: jura doctor, which only lists what is missing or too old
 jura open            # the browser; for the app window, build it from a clone (below)
 ```
 
-It also needs `typst`, `git` and `bwrap` (bubblewrap) on PATH, and agent harnesses
-(`claude`, `codex`, `grok`, `opencode`, …) for the Write terminals. `tinymist` gives the
-live Typst preview. evid and did change together with the workbench: an older one shows
-an **update** pill in the header, and `jura doctor` says which.
+The empty window offers a case to start from: a blank map, or a plain question about a rent
+increase, a contact arrangement or a tax reassessment (`jura case new ID --template rent`).
+evid and did change together with the workbench: an older one shows an **update** pill in
+the header, and `jura doctor` says which.
 
 ## Run from a clone
 
