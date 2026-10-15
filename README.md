@@ -52,7 +52,8 @@ curl -LsSf https://jura.sh/install.sh | sh
 That installs uv if it is missing, then evid, did and the workbench as uv tools, then runs
 `jura setup`. Setup installs what is still missing and asks before each step: `typst` and
 `tinymist` (live preview) into `~/.local/bin`, `git` and `bwrap` (bubblewrap) with your
-package manager (sudo, asked separately), and did's language models. Agent harnesses
+package manager (sudo, asked separately), optionally poppler (`pdftotext`, did's fallback
+for broken PDF text), and did's language models. Agent harnesses
 (`claude`, `codex`, `grok`, `opencode`, …) for the Write terminals are your own install.
 
 By hand:

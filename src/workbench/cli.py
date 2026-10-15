@@ -101,11 +101,13 @@ def setup(yes: bool, dry_run: bool, languages: str) -> None:
 
 def _doctor_table() -> bool:
     """Print doctor's rows. False if a required tool is missing or too old."""
+    import shutil
+
     from . import requires
     from .server import find_app
     from .write.preview import find_tinymist
 
-    found = {"tinymist": find_tinymist, "workbench-app": find_app}
+    found = {"tinymist": find_tinymist, "pdftotext": lambda: shutil.which("pdftotext"), "workbench-app": find_app}
     bad = False
     for name in requires.REQUIRED:
         t = requires.check(name)

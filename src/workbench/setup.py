@@ -8,6 +8,7 @@ already installed is replaced, except evid or did older than this workbench need
 - evid, did: ``uv tool install --upgrade`` from GitHub.
 - git, bwrap: the distribution's package manager (sudo).
 - typst, tinymist: a pinned release binary into ``~/.local/bin`` (no sudo).
+- pdftotext (poppler), optional: the package manager (sudo).
 - did's language models: ``did models <languages>``.
 - Agent harnesses are only reported: logging in to one is the user's.
 """
@@ -39,6 +40,7 @@ TYPST = "0.13.1"  # as in CI
 TINYMIST = "0.15.8"
 ARCH = {"x86_64": ("x86_64", "x64"), "aarch64": ("aarch64", "arm64"), "arm64": ("aarch64", "arm64")}
 PACKAGES = {"git": "git", "bwrap": "bubblewrap"}  # the same name on every manager below
+POPPLER = {"apt-get": "poppler-utils", "dnf": "poppler-utils", "pacman": "poppler", "zypper": "poppler-tools"}  # pdftotext
 MANAGERS = {
     "apt-get": ("apt-get", "install", "-y"),
     "dnf": ("dnf", "install", "-y"),
@@ -71,9 +73,18 @@ def package_manager() -> str:
     return next((m for m in MANAGERS if shutil.which(m)), "")
 
 
-def plan(missing: dict[str, str], *, uv: bool, manager: str, arch: str, tinymist: bool = True, languages: tuple[str, ...] = ()) -> list[Step]:
+def plan(
+    missing: dict[str, str],
+    *,
+    uv: bool,
+    manager: str,
+    arch: str,
+    tinymist: bool = True,
+    pdftotext: bool = False,
+    languages: tuple[str, ...] = (),
+) -> list[Step]:
     """The steps for MISSING ({tool: problem}, as requires.check reports it), in the order they run.
-    TINYMIST: whether the optional live preview is missing. LANGUAGES: did models to fetch."""
+    TINYMIST, PDFTOTEXT: whether those optional tools are missing. LANGUAGES: did models to fetch."""
     steps: list[Step] = []
     for name, src in UV_SOURCES.items():
         if name not in missing:
@@ -98,6 +109,8 @@ def plan(missing: dict[str, str], *, uv: bool, manager: str, arch: str, tinymist
     if tinymist and tinymist_arch:
         url = f"https://github.com/Myriad-Dreamin/tinymist/releases/download/v{TINYMIST}/tinymist-linux-{tinymist_arch}"
         steps.append(Step("tinymist", f"tinymist {TINYMIST}, optional: the live Typst preview in Write", url=url))
+    if pdftotext and manager:
+        steps.append(Step(POPPLER[manager], "optional: pdftotext, which did falls back to for PDFs with a broken text layer", ("sudo", *MANAGERS[manager], POPPLER[manager]), sudo=True))
     if languages:
         steps.append(Step("did models", "the language models that find names", ("did", "models", *languages)))
     return steps
@@ -150,6 +163,7 @@ def run(yes: bool = False, dry_run: bool = False, languages: str = "") -> None:
         manager=package_manager(),
         arch=platform.machine(),
         tinymist=find_tinymist() is None,
+        pdftotext=shutil.which("pdftotext") is None,
     )
     print("jura setup: " + ("everything the workbench needs is installed." if not missing else f"{len(missing)} tool(s) to install or update."))
     for step in steps:

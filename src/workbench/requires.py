@@ -15,7 +15,11 @@ from dataclasses import dataclass
 
 MINIMUM = {"evid": "0.8.0", "did": "0.3.2"}
 REQUIRED = ("evid", "did", "typst", "git", "bwrap")
-OPTIONAL = {"tinymist": "no live Typst preview", "workbench-app": "the browser is the window"}  # what is lost without it
+OPTIONAL = {
+    "tinymist": "no live Typst preview",
+    "pdftotext": "did reads fewer PDFs with a broken text layer",
+    "workbench-app": "the browser is the window",
+}  # what is lost without it
 
 _VERSION = re.compile(r"(\d+)\.(\d+)\.(\d+)")
 
