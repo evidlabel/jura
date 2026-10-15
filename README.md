@@ -2,10 +2,10 @@
 
 # jura workbench
 
-One window for a legal case: write it with agents, next to its datasets and its
-anonymization.
+A legal engineering workbench. One window for a legal case: write it with agents, next
+to its datasets and its anonymization.
 
-**Alpha.** This is a prototype legal engineering workbench (`0.1.0a1`). Features,
+**Alpha.** This is a prototype (`0.1.0a2`). Features,
 file formats and behaviour will change. The **?** button in the header says the same.
 
 ```
@@ -32,6 +32,19 @@ Ctrl+PageDown and Ctrl+PageUp cycle the tabs, from anywhere in the window. Ctrl+
 ## Where things go
 
 A new case comes with one opinionated layout, written into its `AGENTS.md` so an agent never has to work it out: documents in `docs/<topic>/<name>.typ`, the case map in `main.typ`, citations in `refs/refs.yml` (plus hand-added `refs/extra/*.yml`), evid's store in `evid/`, and every PDF in `out/`, mirroring its source (`docs/risk/notat.typ` → `out/docs/risk/notat.pdf`). `out/` is not in git. `jura compile <file.typ>` builds into it, and so does **Export PDF**. `jura layout` prints the layout and lists every file in the wrong place, with the `git mv` or `git rm` that fixes it.
+
+## Why Typst, and git
+
+Every document in a case is Typst: plain text with light markup, compiled to PDF. Git
+tracks plain text line by line, so the case's history is something to read rather than a
+list of saves. Each commit (yours as `user:`, an agent's as `agent:`) shows the sentences
+it changed, a diff between two tagged states is a redline, and `git blame` says who wrote a
+line. A `.docx` is a zipped binary to git: its history could only say that the file
+changed. Plain text is also what agents edit reliably, and the same source always gives
+the same PDF. Nobody has to learn Typst syntax to work in a case: nested plain-text bullet
+lists (`- point`, indented for sub-points) are already valid Typst, and the rest comes from
+annotating a file, a folder or a few lines and rolling the note to an agent. Quotes stay
+out of the text: they are keys into `refs/refs.yml`, drawn from the source at compile time.
 
 ## Isolation
 
