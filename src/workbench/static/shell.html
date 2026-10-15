@@ -72,7 +72,7 @@ header { background: var(--nav); border-bottom: 1px solid var(--line); padding: 
 .mi:hover, .mi.on { background: var(--accent-low); }
 .mi .mono { font-size: 12px; color: var(--muted); }
 #newcase { border-top: 1px solid var(--line); margin-top: 6px; padding: 8px 6px 4px; display: grid; gap: 6px; }
-#newcase input { border: 1px solid var(--line); background: var(--bg); border-radius: 6px; min-height: 34px; padding: 0 10px; }
+#newcase input, #newcase select, #start input { border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 6px; min-height: 34px; padding: 0 10px; }
 .spacer { flex: 1; }
 #needs { color: var(--err); }
 .alpha { font: 700 10.5px var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--warn); border: 1px solid currentColor; border-radius: 999px; padding: 0 7px; line-height: 17px; cursor: pointer; background: none; }
@@ -113,7 +113,19 @@ main { flex: 1; position: relative; min-height: 0; }
 .wait b { color: var(--ink); font-weight: 600; }
 .wait .err { color: var(--err); font-family: var(--mono); font-size: 13px; max-width: 60ch; white-space: pre-wrap; }
 #empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
-#empty .card { max-width: 30rem; text-align: center; display: grid; gap: 12px; }
+#empty { overflow: auto; padding: 24px 16px; }
+#start { width: min(36rem, 100%); display: grid; gap: 14px; margin: auto; }
+#start h2 { margin: 0; font-size: 22px; font-weight: 600; }
+#start p { margin: 0; color: var(--muted); }
+#start label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); max-width: 16rem; }
+#tpls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+#tpls button { display: grid; gap: 4px; align-content: start; text-align: left; padding: 12px 14px; min-height: 64px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; font: inherit; }
+#tpls button:hover, #tpls button:focus-visible { border-color: var(--accent); background: var(--accent-low); }
+#tpls b { font-weight: 600; }
+#tpls span { font-size: 13px; color: var(--muted); }
+#start .needs { color: var(--err); border-left: 2px solid var(--err); padding-left: 10px; font-size: 13.5px; }
+#start .needs ul { margin: 4px 0; padding-left: 18px; }
+@media (max-width: 520px) { #tpls { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
@@ -130,7 +142,8 @@ main { flex: 1; position: relative; min-height: 0; }
         <div id="caselist"></div>
         <form id="newcase">
           <input id="nc-id" placeholder="Case id, e.g. 2026-015" required pattern="[A-Za-z0-9][A-Za-z0-9._\-]{0,63}" aria-label="Case id">
-          <input id="nc-name" placeholder="Name, e.g. Tenancy dispute" aria-label="Case name">
+          <input id="nc-name" placeholder="Name (default: the template's)" aria-label="Case name">
+          <select id="nc-tpl" aria-label="What the case map starts with"></select>
           <button class="btn primary" type="submit">+ New case</button>
         </form>
       </div>
@@ -155,7 +168,7 @@ main { flex: 1; position: relative; min-height: 0; }
 <dialog id="about" aria-labelledby="about-h">
   <h2 id="about-h">jura.sh workbench <span class="alpha" aria-hidden="true">alpha</span></h2>
   <div class="ver mono" id="about-ver"></div>
-  <div class="note" id="about-needs" hidden><b>Install or update before you rely on this window:</b><ul></ul><span class="kind">`jura doctor` lists every tool it uses.</span></div>
+  <div class="note" id="about-needs" hidden><b>Install or update before you rely on this window:</b><ul></ul><span class="kind">Run `jura setup` in a terminal: it installs what is missing and asks before sudo. `jura doctor` lists every tool.</span></div>
   <p>A prototype legal engineering workbench: one window per legal case, where you write the case with agents, next to its evidence and its anonymization.</p>
   <p>It makes bids on five open problems:</p>
   <ul>
@@ -175,7 +188,14 @@ main { flex: 1; position: relative; min-height: 0; }
   <form method="dialog"><button class="btn primary" autofocus>Close</button></form>
 </dialog>
 <main>
-  <div id="empty" hidden><div class="card"><b>No case yet</b><span>Create one from the case menu. Each case is a git-tracked workdir. Personal files stay in ~/did_workdirs, which is not inside the case.</span></div></div>
+  <div id="empty" hidden><form id="start">
+    <h2>Start a case</h2>
+    <p>A case is a folder on this machine, tracked in git. Its map, <span class="mono">main.typ</span>, states the question. Pick what it starts with; you can change all of it.</p>
+    <div class="needs" id="start-needs" hidden><b>Some tools are missing or too old:</b><ul></ul>Run <span class="mono">jura setup</span> in a terminal: it installs them and asks before sudo.</div>
+    <label>Case id<input id="st-id" required pattern="[A-Za-z0-9][A-Za-z0-9._\-]{0,63}" autocomplete="off"></label>
+    <div id="tpls" role="group" aria-label="What the case map starts with"></div>
+    <p class="kind">Personal files stay in the anonymization folder, outside the case. Only placeholders reach it.</p>
+  </form></div>
   <section class="pane" id="p-write" hidden></section>
   <section class="pane" id="p-evid" hidden></section>
   <section class="pane" id="p-did" hidden></section>
@@ -229,6 +249,7 @@ function renderCases() {
   $('#casename').textContent = c ? c.name : 'No case';
   $('#caseid').textContent = c ? c.id : '';
   $('#empty').hidden = !!c;
+  renderStart();
   const list = $('#caselist'); list.textContent = '';
   for (const k of S.state.cases) {
     const b = document.createElement('button');
@@ -269,9 +290,37 @@ function quit() {
 $('#newcase').onsubmit = async e => {
   e.preventDefault();
   try {
-    S.state = await api('POST', '/api/case/new', { id: $('#nc-id').value.trim(), name: $('#nc-name').value.trim() });
+    S.state = await api('POST', '/api/case/new', { id: $('#nc-id').value.trim(), name: $('#nc-name').value.trim(), template: $('#nc-tpl').value });
+    S.fresh = S.state.current; store('case', S.state.current);
     $('#nc-id').value = $('#nc-name').value = '';
     menu(false); caseChanged();
+  } catch (err) { alert(err.message); }
+};
+// The empty window: one click on a template makes the case.
+const TPL_NOTE = { blank: 'An empty map: the question, the line and what is open.', rent: 'Was a rent increase validly notified?', family: 'What contact arrangement to ask for.', tax: 'Was a reassessment made in time?' };
+function nextId() {
+  const y = new Date().getFullYear(), ids = new Set(S.state.cases.map(c => c.id));
+  for (let n = 1; ; n++) { const id = `${y}-${String(n).padStart(3, '0')}`; if (!ids.has(id)) return id; }
+}
+function renderStart() {
+  const tpls = S.state.templates || [{ key: 'blank', name: 'Blank' }];
+  $('#nc-tpl').replaceChildren(...tpls.map(t => Object.assign(document.createElement('option'), { value: t.key, textContent: t.key === 'blank' ? 'Blank map' : 'Map: ' + t.name })));
+  if (current()) return;
+  if (!$('#st-id').value) $('#st-id').value = nextId();
+  $('#tpls').replaceChildren(...tpls.map(t => {
+    const b = document.createElement('button');
+    b.type = 'submit'; b.value = t.key;
+    b.innerHTML = '<b></b><span></span>';
+    b.firstChild.textContent = t.name; b.lastChild.textContent = TPL_NOTE[t.key] || '';
+    return b;
+  }));
+}
+$('#start').onsubmit = async e => {
+  e.preventDefault();
+  const template = (e.submitter && e.submitter.value) || 'blank';
+  try {
+    S.state = await api('POST', '/api/case/new', { id: $('#st-id').value.trim(), template });
+    S.fresh = S.state.current; store('case', S.state.current); caseChanged();
   } catch (err) { alert(err.message); }
 };
 async function selectCase(id) {
@@ -327,6 +376,9 @@ async function mount(tab, c) {
   // Both children hide their own agent pane: the Write tab owns the terminals.
   u.searchParams.set('embed', '1');
   if (tab === 'evid' && c.evidSet) u.searchParams.set('set', c.evidSet);
+  if (tab === 'write' && S.fresh === c.id) {  // a case just made here: open its map, with the preview
+    u.searchParams.set('panes', 'preview'); u.hash = 'main.typ'; S.fresh = null;
+  }
   const f = document.createElement('iframe');
   f.title = label; f.src = u.href;
   f.setAttribute('allow', 'clipboard-read; clipboard-write');
@@ -400,6 +452,8 @@ async function needs() {
     S.state.problems = (await api('GET', '/api/state')).problems;
   }
   $('#needs').hidden = !S.state.problems.length;
+  $('#start-needs').hidden = !S.state.problems.length;
+  $('#start-needs ul').replaceChildren(...S.state.problems.map(t => Object.assign(document.createElement('li'), { textContent: t })));
 }
 
 // ---------- start ----------

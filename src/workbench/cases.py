@@ -25,6 +25,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from workbench import templates
 from workbench.casefile import (
     CONFIG_NAME,
     DEFAULT_SKILL_DIRS,
@@ -65,7 +66,8 @@ background: the user's saves as `user:`, other changes as `agent:`.
 """
 
 
-# Placeholders __ID__ __NAME__ are replaced with Typst string literals.
+# Placeholders __ID__ __NAME__ are replaced with Typst string literals, the others with a
+# template's markup (templates.py).
 # The file compiles on an empty case: no refs.yml, no labquote import, so the
 # Write tab can preview it the moment the case exists.
 MAIN_TYP = r"""// Strategy:
@@ -106,20 +108,18 @@ The map for this case. It states the question, the line to try first, and what i
 
 == Question
 
-_Replace this paragraph with the question the case has to answer._
-
-What has to be decided, and for whom.
+__QUESTION__
 
 == Line
 
 One angle. A second angle is another memo.
 
-- *Main.* The claim the first memo will test.
-- *What would defeat it.* The fact or the rule that ends the line.
-- *Left alone.* What this case is not arguing.
+- *Main.* __MAIN__
+- *What would defeat it.* __DEFEAT__
+- *Left alone.* __LEFT__
 
 == Sources
-
+__COLLECT__
 Linked sets are in `workbench.yml`. Evid pills are global sets, or local documents under `evid/plain/`. Did pills pull PDFs into `evid/anon/`. A label such as \[PERSON 1\] is an identity: leave it as written.
 
 Quotes are gathered into `refs/refs.yml`, the case's one citation file, and drawn at compile time. A `.typ` in any folder loads it as `yaml("/refs/refs.yml")`.
@@ -135,8 +135,7 @@ Quotes are gathered into `refs/refs.yml`, the case's one citation file, and draw
 
 == Open
 
-- The question above is still a placeholder.
-- No labels yet, so no quotes.
+__OPEN__
 """
 
 
@@ -170,9 +169,21 @@ def _toml_str(s: str) -> str:
     return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
-def main_source(cid: str, name: str) -> str:
-    """`main.typ` for a case. The two tokens are Typst string literals."""
-    return MAIN_TYP.replace("__ID__", _toml_str(cid)).replace("__NAME__", _toml_str(name))
+def main_source(cid: str, name: str, template: str = "blank") -> str:
+    """`main.typ` for a case: the map, its sections from TEMPLATE. ID and NAME become Typst string literals."""
+    t = templates.get(template)
+    collect = "".join(f"- {x}\n" for x in t.collect)
+    parts = {
+        "__QUESTION__": t.question,
+        "__MAIN__": t.main,
+        "__DEFEAT__": t.defeat,
+        "__LEFT__": t.left_alone,
+        "__COLLECT__": f"\nTo collect:\n\n{collect}" if collect else "",
+        "__OPEN__": "\n".join(f"- {x}" for x in t.open),
+        "__ID__": _toml_str(cid),
+        "__NAME__": _toml_str(name),
+    }
+    return re.sub("|".join(parts), lambda m: parts[m.group(0)], MAIN_TYP)
 
 
 def load(workdir: Path) -> Case:
@@ -208,8 +219,11 @@ def _git(cwd: Path, *args: str) -> None:
     subprocess.run(["git", "-C", str(cwd), *args], check=True, capture_output=True, text=True)
 
 
-def create(cid: str, name: str) -> Case:
-    """A new case: the git-tracked workdir. Did sets stay under the did root, outside the case."""
+def create(cid: str, name: str = "", template: str = "blank") -> Case:
+    """A new case: the git-tracked workdir, its map from TEMPLATE (templates.py). Without a NAME it
+    takes the template's, else the id. Did sets stay under the did root, outside the case."""
+    t = templates.get(template)
+    name = name or t.name or cid
     if not ID_RE.match(cid):
         raise ValueError(f"bad case id {cid!r}: letters, digits, '.', '_' or '-'")
     workdir = cases_root() / cid
@@ -233,7 +247,7 @@ def create(cid: str, name: str) -> Case:
         ),
     )
     (workdir / "AGENTS.md").write_text(AGENTS_MD.format(id=cid, name=name) + "\n" + LAYOUT, "utf-8")
-    (workdir / "main.typ").write_text(main_source(cid, name), "utf-8")
+    (workdir / "main.typ").write_text(main_source(cid, name, t.key), "utf-8")
     for keep in (DOCS, REFS_EXTRA):  # git keeps no empty folder
         (workdir / keep).mkdir(parents=True)
         (workdir / keep / ".gitkeep").write_text("", "utf-8")
@@ -242,7 +256,7 @@ def create(cid: str, name: str) -> Case:
     (workdir / ".gitignore").write_text(f"{OUT}/\n.pull-state.json\n.labels.lock\n.feedback.lock\nvecdb/\n", "utf-8")
     _git(workdir, "init", "-q")
     _git(workdir, "add", CONFIG_NAME, "AGENTS.md", "main.typ", f"{DOCS}/.gitkeep", f"{REFS_EXTRA}/.gitkeep", ".gitignore")
-    _git(workdir, "commit", "-q", "-m", f"workbench: new case {cid}")
+    _git(workdir, "commit", "-q", "-m", f"workbench: new case {cid}" + ("" if t.key == "blank" else f" ({t.key})"))
     return load(workdir)
 
 

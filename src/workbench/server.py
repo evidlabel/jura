@@ -36,7 +36,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 
-from . import __version__, cases, requires
+from . import __version__, cases, requires, templates
 from .supervisor import Child, Supervisor
 
 STATIC = resources.files(__package__) / "static"
@@ -200,6 +200,7 @@ class Workbench:
             "tabs": tabs,
             "badges": badges,
             "problems": self.problems,
+            "templates": [{"key": t.key, "name": templates.label(t)} for t in templates.TEMPLATES.values()],
         }
 
     def stop(self) -> None:
@@ -305,7 +306,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, wb.select(str(self.body().get("id", ""))))
         if method == "POST" and path == "/api/case/new":
             b = self.body()
-            case = cases.create(str(b.get("id", "")).strip(), str(b.get("name", "")).strip() or str(b.get("id", "")))
+            case = cases.create(str(b.get("id", "")).strip(), str(b.get("name", "")).strip(), str(b.get("template", "") or "blank"))
             return self.send_json(200, wb.select(case.id))
         if method == "POST" and path == "/api/badge":
             b = self.body()
