@@ -3,6 +3,7 @@
 import base64
 import json
 import os
+import shutil
 import socket
 import subprocess
 import threading
@@ -543,6 +544,17 @@ def test_queue_rolled(case):
     assert q["target"] == "claude" and q["feedback"] == ["3"] and q["notes"]["memo.typ"] == "tighten"
     q = queue.rolled(case, "opencode", {}, [4, 3], [])
     assert q["feedback"] == ["3", "4"] and len(q["history"]) == 2 and q["history"][0]["target"] == "opencode"
+
+
+def test_queue_forgets_a_previous_case_at_the_same_path(case):
+    queue.rolled(case, "claude", {}, [1, 2], [])
+    assert queue.read(case)["feedback"] == ["1", "2"]
+    shutil.rmtree(case / ".git")  # the case is made again at the same path: feedback ids start at 1 again
+    subprocess.run(["git", "-C", str(case), "init", "-q"], check=True)
+    subprocess.run(["git", "-C", str(case), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(case), "commit", "-qm", "start again"], check=True)
+    q = queue.read(case)
+    assert q["at"] == 0 and q["feedback"] == [] and q["history"] == []
 
 
 # ---------- auto-git ----------
