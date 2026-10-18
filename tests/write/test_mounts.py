@@ -51,7 +51,7 @@ def test_notes_and_feedback_stay_per_folder(two, tree, tmp_path):
     two.set_note("proj/pkg", "package")
     two.set_note("other", "the other root")
     assert two.read_notes() == {"proj/pkg": "package", "other": "the other root"}
-    assert (tmp_path / "other" / ".treenotes.json").exists()
+    assert (tmp_path / "other" / ".juranotes.json").exists()
     two.move_notes("proj/pkg", "proj/lib")
     with pytest.raises(HTTPError):
         two.move_notes("proj/lib", "other/lib")
@@ -139,7 +139,7 @@ def test_top_level_and_cross_folder(two, tree, tmp_path, capsys):
     two.set_note("", "both projects")
     assert two.version() != v
     assert two.read_notes()["."] == "both projects"
-    assert (tmp_path / ".treenotes.json").exists()
+    assert (tmp_path / ".juranotes.json").exists()
     top = two.add_feedback([""], "load every skill")
     assert top["id"] == "*:1" and top["paths"] == [""] and top["root"] == str(tmp_path)
     cross = two.add_feedback(["proj/pkg", "other/docs"], "merge these")

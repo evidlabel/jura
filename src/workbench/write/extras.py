@@ -28,6 +28,9 @@ Routes (all under the handler's guards: loopback Host, X-Treedit on writes):
 from __future__ import annotations
 
 import os
+import shutil
+import subprocess
+import tempfile
 from importlib import resources
 from pathlib import Path
 
@@ -38,6 +41,51 @@ from .autogit import AutoGit
 from .preview import Previews, find_tinymist
 
 FONTS = resources.files("workbench") / "static" / "fonts"
+PDF_MAX = 16_000_000  # a rendered page above this is refused
+
+
+def pdf_pages(path: Path) -> int:
+    """Page count from pdfinfo, or 0 when poppler is not installed."""
+    exe = shutil.which("pdfinfo")
+    if not exe:
+        return 0
+    try:
+        r = subprocess.run([exe, str(path)], capture_output=True, text=True, timeout=20)
+    except (OSError, subprocess.TimeoutExpired):
+        return 0
+    for line in r.stdout.splitlines():
+        if line.startswith("Pages:"):
+            first = line.split(":", 1)[1].strip().split(" ")[0]
+            return int(first) if first.isdigit() else 0
+    return 0
+
+
+def pdf_page_png(path: Path, page: int, dpi: int) -> tuple[bytes, str]:
+    """One page as a PNG, via pdftoppm.
+
+    The app window is a system webview (WebKitGTK / WKWebView) with no built-in PDF
+    viewer, so a PDF cannot be an iframe there. Rendering the page to an image does
+    not depend on the webview.
+    """
+    exe = shutil.which("pdftoppm")
+    if not exe:
+        return b"", "pdftoppm (poppler-utils) is not installed"
+    with tempfile.TemporaryDirectory(prefix="workbench-pdf-") as tmp:
+        out = Path(tmp) / "page"
+        try:
+            r = subprocess.run(
+                [exe, "-png", "-singlefile", "-f", str(page), "-l", str(page), "-r", str(dpi), str(path), str(out)],
+                capture_output=True, text=True, timeout=60,
+            )
+        except (OSError, subprocess.TimeoutExpired) as e:
+            return b"", f"pdftoppm failed: {e}"
+        png = out.with_suffix(".png")
+        if r.returncode != 0 or not png.is_file():
+            return b"", ((r.stderr or r.stdout).strip() or "pdftoppm produced no image")[:400]
+        data = png.read_bytes()
+    if len(data) > PDF_MAX:
+        return b"", "that page raster is too large"
+    return data, ""
 
 
 class Extras:
@@ -114,6 +162,27 @@ class Extras:
             return True
         if method == "GET" and path == "/api/wb":
             h.send_json(200, self.cfg())
+            return True
+        if method == "GET" and path in ("/api/pdf", "/api/pdf/info"):
+            # Render a PDF page to an image: the app webview has no PDF viewer.
+            t = self.ws.target_path(self.ws.norm(q.get("path", "")))
+            if t.suffix.lower() != ".pdf" or not t.is_file():
+                h.send_json(415, {"error": "not a PDF in the workdir"})
+                return True
+            if path == "/api/pdf/info":
+                h.send_json(200, {"pages": pdf_pages(t)})
+                return True
+            try:
+                page = max(1, int(q.get("page") or 1))
+                dpi = min(220, max(60, int(q.get("dpi") or 130)))
+            except ValueError:
+                h.send_json(400, {"error": "bad page or dpi"})
+                return True
+            data, err = pdf_page_png(t, page, dpi)
+            if err:
+                h.send_json(400, {"error": err})
+            else:
+                h.send(200, data, "image/png", {"Cache-Control": "no-store"})
             return True
         if method == "GET" and path == "/api/sources":
             h.send_json(200, sources.panel(root, self.evid, self.did))

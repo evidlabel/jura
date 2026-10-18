@@ -220,6 +220,9 @@ body.wrap #editor{overflow-x:hidden}
 #plotbar{display:flex;gap:8px;align-items:center;padding:4px 14px;border-bottom:1px solid var(--line);background:var(--panel);font-size:12px;color:var(--dim)}
 #plotbar[hidden]{display:none}
 #plotbar button{padding:1px 8px;font-size:12px}
+#pdfnav{display:inline-flex;align-items:center;gap:6px}
+#pdfnav[hidden]{display:none}
+#pdf-page{font-family:var(--mono);font-size:11.5px;color:var(--dim);min-width:3.6em;text-align:center}
 #plotview{flex:1;min-height:0;display:flex;flex-direction:column;background:var(--bg)}
 #plotview[hidden]{display:none}
 #plotstage{flex:1;min-height:0;overflow:auto;cursor:grab;
@@ -572,7 +575,9 @@ html.embed .ptoggles:has(#pt-preview[hidden]){display:none}  /* Preview is its o
       <div id="fbbox"><div class="fbhead"><span>Feedback for the agent</span><span id="fbcount"></span><span class="spacer"></span><button id="b-fb" title="Select lines in the editor first to comment on them">+ Feedback</button></div><div id="fbcompose"></div><div id="fblist"></div></div>
       <div id="banner" hidden></div>
       <div id="plotbar" hidden>
-        <span id="plotmeta"></span><span class="spacer"></span>
+        <span id="plotmeta"></span>
+        <span id="pdfnav" hidden><button id="pdf-prev" title="Previous page">‹</button><span id="pdf-page"></span><button id="pdf-next" title="Next page">›</button></span>
+        <span class="spacer"></span>
         <button id="plot-out" title="Zoom out">−</button>
         <button id="plot-fit" title="Fit the pane. Double-click the plot for its own size">Fit</button>
         <button id="plot-in" title="Zoom in">+</button>
@@ -1683,11 +1688,46 @@ function setFile(f, keepView) {
   syncPreview();
   renderFb();
 }
-const Plot = { source: false, fit: true, scale: 1 };  // the open plot: picture, or SVG source
+const Plot = { source: false, fit: true, scale: 1, pdf: null };  // the open plot: picture, or SVG source
 S.plotDoc = null;
 function rawUrl(path, hash) {
   return '/api/raw?path=' + encodeURIComponent(path) + '&v=' + encodeURIComponent(hash || '');
 }
+const PDF_DPI = 130;  // server-side raster; the app webview has no PDF viewer of its own
+function pdfUrl(f, page) {
+  return '/api/pdf?path=' + encodeURIComponent(f.path) + '&page=' + page + '&dpi=' + PDF_DPI + '&v=' + encodeURIComponent(f.hash || '');
+}
+async function showPdf(f) {
+  Plot.pdf = { page: 1, pages: 0, hash: f.hash };
+  showPdfPage(f, 1);
+  try {
+    const r = await api('GET', '/api/pdf/info?path=' + encodeURIComponent(f.path));
+    if (Plot.pdf && Plot.pdf.hash === f.hash) { Plot.pdf.pages = r.pages || 0; updatePdfBar(); }
+  } catch {}
+}
+function showPdfPage(f, n) {
+  const page = Math.max(1, n || 1);
+  Plot.pdf = { page, pages: (Plot.pdf || {}).pages || 0, hash: f.hash };
+  const stage = $('#plotstage');
+  stage.classList.add('pdf');
+  stage.replaceChildren();
+  const frame = el('div', 'plotframe'), img = document.createElement('img');
+  img.alt = f.path; img.draggable = false; img.title = 'PDF page ' + page;
+  img.src = pdfUrl(f, page);
+  img.onload = () => layoutPlot();
+  img.onerror = () => { $('#plotmeta').textContent = 'could not show this page — is poppler (pdftoppm) installed?'; };
+  frame.append(img); stage.append(frame);
+  $('#plotmeta').textContent = 'pdf';
+  updatePdfBar();
+}
+function updatePdfBar() {
+  const p = Plot.pdf || { page: 1, pages: 0 };
+  $('#pdf-page').textContent = p.pages ? `${p.page} / ${p.pages}` : String(p.page);
+  $('#pdf-prev').disabled = p.page <= 1;
+  $('#pdf-next').disabled = !p.pages || p.page >= p.pages;
+}
+$('#pdf-prev').onclick = () => { if (Plot.pdf && S.file && Plot.pdf.page > 1) showPdfPage(S.file, Plot.pdf.page - 1); };
+$('#pdf-next').onclick = () => { if (Plot.pdf && S.file && Plot.pdf.pages && Plot.pdf.page < Plot.pdf.pages) showPdfPage(S.file, Plot.pdf.page + 1); };
 function showPlot(f, keep) {
   const stage = $('#plotstage');
   if (stage.dataset.path !== f.path) { Plot.fit = true; Plot.scale = 1; }
@@ -1697,9 +1737,7 @@ function showPlot(f, keep) {
   const pdf = f.mime === 'application/pdf';
   stage.classList.toggle('pdf', pdf);
   if (pdf) {
-    const fr = document.createElement('iframe');
-    fr.src = rawUrl(f.path, f.hash); fr.title = f.path; stage.append(fr);
-    $('#plotmeta').textContent = 'pdf';
+    showPdf(f);  // the app webview cannot show a PDF inline; pages arrive as images
   } else {
     const frame = el('div', 'plotframe'), img = document.createElement('img');
     img.alt = f.path; img.draggable = false; img.title = 'Double-click for the plot’s own size';
@@ -1745,7 +1783,8 @@ function syncChrome() {
   $('#plot-src').hidden = !(S.plotDoc && S.plotDoc.content != null);
   $('#plot-src').textContent = Plot.source ? 'Plot' : 'Source';
   const pdf = !!(S.file && S.file.mime === 'application/pdf') || !!(n && n.mime === 'application/pdf');
-  $('#plot-out').hidden = $('#plot-in').hidden = $('#plot-fit').hidden = pdf || Plot.source;
+  $('#plot-out').hidden = $('#plot-in').hidden = $('#plot-fit').hidden = !!Plot.source;  // a PDF page is an image too: keep zoom
+  $('#pdfnav').hidden = !pdf;
 }
 $('#plot-in').onclick = () => zoomPlot(1.25);
 $('#plot-out').onclick = () => zoomPlot(0.8);

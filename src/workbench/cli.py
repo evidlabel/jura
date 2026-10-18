@@ -107,7 +107,7 @@ def _doctor_table() -> bool:
     from .server import find_app
     from .write.preview import find_tinymist
 
-    found = {"tinymist": find_tinymist, "pdftotext": lambda: shutil.which("pdftotext"), "workbench-app": find_app}
+    found = {"tinymist": find_tinymist, "pdftotext": lambda: shutil.which("pdftotext"), "pdftoppm": lambda: shutil.which("pdftoppm"), "workbench-app": find_app}
     bad = False
     for name in requires.REQUIRED:
         t = requires.check(name)

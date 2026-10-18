@@ -12,8 +12,7 @@ def _isolated_state(tmp_path_factory, monkeypatch):
     home = tmp_path_factory.mktemp("home")
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("XDG_STATE_HOME", str(home / "state"))
-    monkeypatch.delenv("TREEDIT_URL", raising=False)
-    monkeypatch.delenv("TREEDIT_AGENT", raising=False)
+    monkeypatch.delenv("WORKBENCH_WRITE_URL", raising=False)
     monkeypatch.setenv("NO_COLOR", "1")
 
 

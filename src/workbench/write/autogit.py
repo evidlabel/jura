@@ -25,7 +25,7 @@ from pathlib import Path
 
 IDLE = 5.0
 PERIOD = 1.5
-NOTES = {".treenotes.json", "notes/.treenotes.json"}
+NOTES = {".juranotes.json", "notes/.juranotes.json", ".treenotes.json", "notes/.treenotes.json"}  # old name: its rename
 
 
 def git(root: Path, *args: str, check: bool = True) -> str:

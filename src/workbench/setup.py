@@ -80,11 +80,11 @@ def plan(
     manager: str,
     arch: str,
     tinymist: bool = True,
-    pdftotext: bool = False,
+    poppler: bool = False,
     languages: tuple[str, ...] = (),
 ) -> list[Step]:
     """The steps for MISSING ({tool: problem}, as requires.check reports it), in the order they run.
-    TINYMIST, PDFTOTEXT: whether those optional tools are missing. LANGUAGES: did models to fetch."""
+    TINYMIST, POPPLER: whether those optional tools are missing. LANGUAGES: did models to fetch."""
     steps: list[Step] = []
     for name, src in UV_SOURCES.items():
         if name not in missing:
@@ -109,8 +109,8 @@ def plan(
     if tinymist and tinymist_arch:
         url = f"https://github.com/Myriad-Dreamin/tinymist/releases/download/v{TINYMIST}/tinymist-linux-{tinymist_arch}"
         steps.append(Step("tinymist", f"tinymist {TINYMIST}, optional: the live Typst preview in Write", url=url))
-    if pdftotext and manager:
-        steps.append(Step(POPPLER[manager], "optional: pdftotext, which did falls back to for PDFs with a broken text layer", ("sudo", *MANAGERS[manager], POPPLER[manager]), sudo=True))
+    if poppler and manager:
+        steps.append(Step(POPPLER[manager], "optional: pdftotext and pdftoppm (poppler) — did's plain-text fallback and the Write tab's PDF viewer", ("sudo", *MANAGERS[manager], POPPLER[manager]), sudo=True))
     if languages:
         steps.append(Step("did models", "the language models that find names", ("did", "models", *languages)))
     return steps
@@ -163,7 +163,7 @@ def run(yes: bool = False, dry_run: bool = False, languages: str = "") -> None:
         manager=package_manager(),
         arch=platform.machine(),
         tinymist=find_tinymist() is None,
-        pdftotext=shutil.which("pdftotext") is None,
+        poppler=shutil.which("pdftotext") is None or shutil.which("pdftoppm") is None,
     )
     print("jura setup: " + ("everything the workbench needs is installed." if not missing else f"{len(missing)} tool(s) to install or update."))
     for step in steps:

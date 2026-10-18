@@ -20,7 +20,7 @@ What it does
     which it reads but never writes. Leave feedback
     for an agent on a path, on lines of a file, or on several paths; it is open or
     done and the agent replies via `jura write fb`. Everything lives in
-    PATH/.treenotes.json, or PATH/notes/.treenotes.json when a notes folder is
+    PATH/.juranotes.json, or PATH/notes/.juranotes.json when a notes folder is
     present: a flat {"relative/path": "annotation"} map, or
     {"notes": {...}, "feedback": [...]} once there is feedback.
   * Watches the disk: when an agent (or anything else) changes the tree, the
@@ -65,6 +65,8 @@ from urllib.request import urlopen
 
 from treeparse import argument, cli, command, group, option
 
+from workbench.paths import state_dir
+
 from . import __version__
 from .term import Sessions, ws_accept
 
@@ -81,7 +83,8 @@ DEFAULT_IGNORE = [
     ".ruff_cache",
     "target",
 ]
-NOTES_NAME = ".treenotes.json"
+NOTES_NAME = ".juranotes.json"
+OLD_NOTES_NAME = ".treenotes.json"  # the name up to 0.1.0a2, renamed in place on first use
 DEFAULT_SHOW = ["notes"]  # a private notes/ repo is usually git-ignored by the project, but belongs in the tree
 
 
@@ -93,6 +96,13 @@ def notes_file(root: Path) -> Path:
     when notes/ has none yet. When both files exist, the root one stays in use.
     """
     folder = root / "notes"
+    for d in (root, folder):
+        old, new = d / OLD_NOTES_NAME, d / NOTES_NAME
+        if old.is_file() and not new.exists():
+            try:
+                old.rename(new)
+            except OSError:
+                pass
     home = folder / NOTES_NAME
     legacy = root / NOTES_NAME
     if not folder.is_dir():
@@ -352,10 +362,18 @@ class Workspace:
         self._texts: dict = {}  # path -> last text seen (bounded), to tell which lines a change touched
         self._text_bytes = 0
         self.line_changes: dict = {}  # path -> [{"at", "by", "ranges": [[first, last, add|chg|del], ...]}]
-        state = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "treedit"
+        state = state_dir()
         digest = hashlib.sha1(str(self.root).encode()).hexdigest()[:16]
         self.drafts_path = state / f"{digest}-drafts.json"
         self.history_path = state / f"{digest}-history.jsonl"  # one JSON event per line, kept for CHANGE_TTL
+        old = state.parent / "treedit"  # where releases up to 0.1.0a2 kept them; copied over once
+        for new in (self.drafts_path, self.history_path):
+            if not new.exists() and (old / new.name).is_file():
+                try:
+                    state.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(old / new.name, new)
+                except OSError:
+                    pass
         self._load_history()
 
     # ---------- paths ----------
@@ -1664,25 +1682,25 @@ class Mounts:
     def rename(self, src: str, dst: str) -> None:
         _, w, (s, d) = self._one([src, dst])
         if not s:
-            raise HTTPError(400, "an opened folder cannot be moved from treedit")
+            raise HTTPError(400, "an opened folder cannot be moved from Write")
         w.rename(s, d)
 
     def delete(self, rel: str) -> None:
         _, w, sub = self.split(rel)
         if not sub:
-            raise HTTPError(400, "an opened folder cannot be deleted from treedit")
+            raise HTTPError(400, "an opened folder cannot be deleted from Write")
         w.delete(sub)
 
 
 class Handler(BaseHTTPRequestHandler):
     ws: Workspace
     loopback = True
-    server_version = "treedit"
+    server_version = "jura-write"
     token = secrets.token_urlsafe(18)  # proves a terminal connection comes from the page we served
     terms = None  # Sessions: the agent pane's terminals, when it is available (loopback only)
     agent = ""
     context: ClassVar[dict] = {}  # what the user has selected in the window, for `jura write context`
-    window = None  # the treedit-app process we launched; Ctrl+W / Ctrl+Q in the page close it
+    window = None  # the app window process we launched; Ctrl+W / Ctrl+Q in the page close it
     app = False  # the page is shown in the app window (so it should handle Ctrl+W / Ctrl+Q itself)
     extras = None  # workbench: sources, skills, preview, auto-git, queue (write/extras.py)
 
@@ -1838,8 +1856,8 @@ class Handler(BaseHTTPRequestHandler):
         if method == "PUT" and path == "/api/note":
             ws.set_note(b.get("path", ""), str(b.get("note", "")))
             return self.send_json(200, {"ok": True})
-        if method == "POST" and path == "/api/log":  # page errors, shown with TREEDIT_DEBUG=1
-            if os.environ.get("TREEDIT_DEBUG"):
+        if method == "POST" and path == "/api/log":  # page errors, shown with WORKBENCH_DEBUG=1
+            if os.environ.get("WORKBENCH_DEBUG"):
                 print(f"page: {str(b.get('msg', ''))[:2000]}", file=sys.stderr, flush=True)
             return self.send_json(200, {"ok": True})
         if method == "POST" and path == "/api/context":
@@ -1897,7 +1915,7 @@ class Handler(BaseHTTPRequestHandler):
         if not secrets.compare_digest(q.get("token", ""), self.token):
             raise HTTPError(403, "bad terminal token")
         if self.headers.get("Origin") != f"http://{self.headers.get('Host')}":
-            raise HTTPError(403, "terminal connections must come from the treedit page")
+            raise HTTPError(403, "terminal connections must come from the Write page")
         key = self.headers.get("Sec-WebSocket-Key")
         if not key or "websocket" not in (self.headers.get("Upgrade") or "").lower():
             raise HTTPError(400, "expected a WebSocket upgrade")
@@ -1933,7 +1951,7 @@ def _ws(
 ) -> Workspace:
     r = Path(root).expanduser()
     if not r.is_dir():
-        sys.exit(f"treedit: {r} is not a folder")
+        sys.exit(f"write: {r} is not a folder")
     n = Path(notes).expanduser() if notes else notes_file(r)
     return Workspace(
         r,
@@ -1967,7 +1985,7 @@ def free_port(port: int, host: str = "127.0.0.1") -> int:
                 return p
             except OSError:
                 continue
-    sys.exit(f"treedit: no free port in {port}-{port + 19}")
+    sys.exit(f"write: no free port in {port}-{port + 19}")
 
 
 def serve(
@@ -1998,10 +2016,7 @@ def serve(
         "SHELL": login_shell(),  # your shell, as in any terminal (the app may start without $SHELL)
         "TERM": "xterm-256color",
         "COLORTERM": "truecolor",
-        "TREEDIT_ROOT": str(ws.root),
-        "TREEDIT_ROOTS": str(ws.root),
-        "TREEDIT_NOTES": str(ws.notes_path),
-        "TREEDIT_URL": url,
+        "WORKBENCH_WRITE_URL": url,  # for `jura write context` / `edits`; the case dir is $WORKBENCH_CASE_DIR
     }
     from .extras import Extras
 
@@ -2176,8 +2191,8 @@ def fb_rm(
 
 def show_context(url: str) -> None:
     """Print what the user has selected in the Write window: paths, and the line span with its
-    quoted text when lines are selected. Inside the agent pane the window's URL is in $TREEDIT_URL."""
-    base = (url or os.environ.get("TREEDIT_URL") or "http://127.0.0.1:8765/").rstrip("/")
+    quoted text when lines are selected. Inside the agent pane the window's URL is in $WORKBENCH_WRITE_URL."""
+    base = (url or os.environ.get("WORKBENCH_WRITE_URL") or "http://127.0.0.1:8765/").rstrip("/")
     try:
         with urlopen(base + "/api/context", timeout=3) as r:
             ctx = json.loads(r.read())
@@ -2217,9 +2232,9 @@ def show_edits(
         body = d.get("diff") if d.get("diff") is not None else "(file too large to diff; whole new text kept)"
         for ln in body.rstrip("\n").splitlines():
             print(f"    {ln}")
-    base = (url or os.environ.get("TREEDIT_URL") or "").rstrip("/")
+    base = (url or os.environ.get("WORKBENCH_WRITE_URL") or "").rstrip("/")
     if not base:
-        print("saved in the editor: unknown (no Write window; set $TREEDIT_URL or --url)")
+        print("saved in the editor: unknown (no Write window; set $WORKBENCH_WRITE_URL or --url)")
         return
     try:
         with urlopen(f"{base}/api/changes?{urlencode({'root': str(ws.root)})}", timeout=3) as r:
@@ -2321,14 +2336,14 @@ app = cli(
             options=[
                 NOTE_ROOT,
                 *SHARED,
-                option(flags=["--url"], arg_type=str, default="", help="window URL (default $TREEDIT_URL)"),
+                option(flags=["--url"], arg_type=str, default="", help="window URL (default $WORKBENCH_WRITE_URL)"),
             ],
         ),
         cli(
             name="context",
             help="What the user has selected in the Write window.",
             callback=show_context,
-            options=[option(flags=["--url"], arg_type=str, default="", help="window URL (default $TREEDIT_URL)")],
+            options=[option(flags=["--url"], arg_type=str, default="", help="window URL (default $WORKBENCH_WRITE_URL)")],
         ),
         group(
             name="fb",

@@ -38,9 +38,9 @@ def test_plan_everything_missing_on_apt():
 
 
 def test_plan_offers_pdftotext_with_sudo():
-    steps = setup.plan({}, uv=True, manager="pacman", arch="x86_64", tinymist=False, pdftotext=True)
+    steps = setup.plan({}, uv=True, manager="pacman", arch="x86_64", tinymist=False, poppler=True)
     assert [(s.tool, s.sudo, s.argv[-1]) for s in steps] == [("poppler", True, "poppler")]
-    assert setup.plan({}, uv=True, manager="", arch="x86_64", tinymist=False, pdftotext=True) == []
+    assert setup.plan({}, uv=True, manager="", arch="x86_64", tinymist=False, poppler=True) == []
 
 
 @pytest.mark.parametrize("manager", ["dnf", "pacman", "zypper"])

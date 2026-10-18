@@ -2,6 +2,7 @@
 import json
 import os
 import time
+from pathlib import Path
 
 import pytest
 
@@ -323,6 +324,18 @@ def test_drafts(ws):
     assert ws.read_drafts() == {}
 
 
+def test_state_is_workbench_own(tree, tmp_path):
+    """Drafts live under the workbench state dir, not treedit's; old ones are copied over once."""
+    state = Path(os.environ["XDG_STATE_HOME"])
+    first = _ws(str(tree), "", [], False)
+    assert first.drafts_path.parent == state / "workbench"
+    old = state / "treedit"
+    old.mkdir(parents=True)
+    (old / first.drafts_path.name).write_text('{"a.txt": {"full": "x"}}')
+    assert set(_ws(str(tree), "", [], False).read_drafts()) == {"a.txt"}
+    assert (old / first.drafts_path.name).is_file()
+
+
 def test_outside_root(ws):
     with pytest.raises(HTTPError):
         ws.node_path("../x")
@@ -390,7 +403,7 @@ def test_grep_walks_when_there_is_no_git(ws, tree):
     (tree / "__pycache__").mkdir()
     (tree / "__pycache__" / "hidden.py").write_text("return 1\n")
     (tree / "bin.dat").write_bytes(b"return 1\0rest")
-    (tree / ".treenotes.json").write_text("return 1\n")
+    (tree / ".juranotes.json").write_text("return 1\n")
     (tree / "dots.txt").write_text("a.b\naxb\n")
     (tree / "long.txt").write_text(("word " * 80) + "zephyr\n")
     (tree / "many.txt").write_text("".join(f"hit {i}\n" for i in range(5)))
@@ -446,12 +459,28 @@ def test_custom_notes_path(tree, tmp_path):
 
 def test_notes_folder_holds_the_file(tree):
     (tree / "notes").mkdir()
+    (tree / ".juranotes.json").write_text('{"pkg": "keep"}\n')
+    ws = _ws(str(tree), "", [], False)
+    assert ws.notes_path == (tree / "notes" / ".juranotes.json").resolve()
+    assert json.loads(ws.notes_path.read_text()) == {"pkg": "keep"}
+    assert not (tree / ".juranotes.json").exists()
+    assert find(ws.scan(), "notes/.juranotes.json") is None
+
+
+def test_old_notes_name_is_renamed(tree):
     (tree / ".treenotes.json").write_text('{"pkg": "keep"}\n')
     ws = _ws(str(tree), "", [], False)
-    assert ws.notes_path == (tree / "notes" / ".treenotes.json").resolve()
-    assert json.loads(ws.notes_path.read_text()) == {"pkg": "keep"}
+    assert ws.notes_path == (tree / ".juranotes.json").resolve()
+    assert ws.read_notes() == {"pkg": "keep"}
     assert not (tree / ".treenotes.json").exists()
-    assert find(ws.scan(), "notes/.treenotes.json") is None
+
+
+def test_old_notes_name_in_the_notes_folder_is_renamed(tree):
+    (tree / "notes").mkdir()
+    (tree / "notes" / ".treenotes.json").write_text('{"pkg": "keep"}\n')
+    ws = _ws(str(tree), "", [], False)
+    assert ws.notes_path == (tree / "notes" / ".juranotes.json").resolve()
+    assert ws.read_notes() == {"pkg": "keep"}
 
 
 def test_new_notes_go_into_the_notes_folder(tree):
@@ -459,16 +488,16 @@ def test_new_notes_go_into_the_notes_folder(tree):
     ws = _ws(str(tree), "", [], False)
     assert not ws.notes_path.exists()
     ws.set_note(".", "hi")
-    assert ws.notes_path == (tree / "notes" / ".treenotes.json").resolve()
-    assert not (tree / ".treenotes.json").exists()
+    assert ws.notes_path == (tree / "notes" / ".juranotes.json").resolve()
+    assert not (tree / ".juranotes.json").exists()
 
 
 def test_both_notes_files_keep_the_root_one(tree):
     (tree / "notes").mkdir()
-    (tree / ".treenotes.json").write_text('{".": "root"}\n')
-    (tree / "notes" / ".treenotes.json").write_text('{".": "inner"}\n')
+    (tree / ".juranotes.json").write_text('{".": "root"}\n')
+    (tree / "notes" / ".juranotes.json").write_text('{".": "inner"}\n')
     ws = _ws(str(tree), "", [], False)
-    assert ws.notes_path == (tree / ".treenotes.json").resolve()
+    assert ws.notes_path == (tree / ".juranotes.json").resolve()
     assert ws.read_notes() == {".": "root"}
 
 
@@ -477,13 +506,13 @@ def test_explicit_notes_path_ignores_the_notes_folder(tree, tmp_path):
     ws = _ws(str(tree), str(tmp_path / "elsewhere.json"), [], False)
     ws.set_note("pkg", "x")
     assert (tmp_path / "elsewhere.json").is_file()
-    assert not (tree / "notes" / ".treenotes.json").exists()
+    assert not (tree / "notes" / ".juranotes.json").exists()
 
 
 def test_product_git_does_not_see_the_notes_file(repo):
     ws = _ws(str(repo), "", [], False)
     ws.set_note("pkg", "x")
-    assert ".treenotes.json" not in git(repo, "status", "--short")
+    assert ".juranotes.json" not in git(repo, "status", "--short")
 
 
 def test_shared_top_notes_follow_a_notes_folder(tree, tmp_path):
@@ -493,6 +522,6 @@ def test_shared_top_notes_follow_a_notes_folder(tree, tmp_path):
     (other / "a.txt").write_text("a\n")
     mounts = Mounts([_ws(str(tree), "", [], False), _ws(str(other), "", [], False)])
     mounts.set_note("", "together")
-    assert (tmp_path / "notes" / ".treenotes.json").is_file()
-    assert not (tmp_path / ".treenotes.json").exists()
+    assert (tmp_path / "notes" / ".juranotes.json").is_file()
+    assert not (tmp_path / ".juranotes.json").exists()
     assert mounts.read_notes()["."] == "together"

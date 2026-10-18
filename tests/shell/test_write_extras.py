@@ -572,7 +572,7 @@ def test_autogit_waits_for_quiet_then_attributes(case):
     g = autogit.AutoGit(ws, idle=5)
     (case / "memo.typ").write_text("= Memo\n\nMore text.\n")
     (case / "angle.typ").write_text("= Angle\n")
-    (case / ".treenotes.json").write_text("{}\n")
+    (case / ".juranotes.json").write_text("{}\n")
     assert g.tick(now=100) is None  # first sight
     assert g.tick(now=103) is None  # not quiet long enough
     done = g.tick(now=106)
@@ -908,6 +908,12 @@ def test_gather_writes_one_merged_store(case, monkeypatch):
     merge = next(c for c in calls if "merge" in c)
     assert merge[:3] == ["evid", "refs", "merge"] and "-o" in merge
     assert sum("set" in c and "gather" in c for c in calls) == 2  # one per linked set
+
+
+def test_pdf_route_refuses_non_pdf(write_server):
+    """The PDF viewer route serves only .pdf files in the workdir."""
+    assert call(write_server, "GET", "/api/pdf?path=memo.typ")[0] == 415
+    assert call(write_server, "GET", "/api/pdf/info?path=memo.typ")[0] == 415
 
 
 def test_refs_has_one_place(case, tmp_path, monkeypatch, capsys):

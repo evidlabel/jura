@@ -18,6 +18,7 @@ REQUIRED = ("evid", "did", "typst", "git", "bwrap")
 OPTIONAL = {
     "tinymist": "no live Typst preview",
     "pdftotext": "did reads fewer PDFs with a broken text layer",
+    "pdftoppm": "PDFs in the Write tab (rendered to page images; the app window has no PDF viewer)",
     "workbench-app": "the browser is the window",
 }  # what is lost without it
 
