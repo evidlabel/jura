@@ -5,7 +5,6 @@ __pycache__/
 .ruff_cache/
 app/target/
 app/gen/
-Makefile
 notes/
 app/Cargo.lock
 AGENTS.md
