@@ -6,6 +6,5 @@ __pycache__/
 app/target/
 app/gen/
 notes/
-app/Cargo.lock
 AGENTS.md
 CLAUDE.md
