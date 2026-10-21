@@ -41,6 +41,7 @@ from workbench.layout import DOCS, LAYOUT, OUT, REFS_EXTRA
 DEFAULT_AGENTS = ("claude", "codex", "grok", "opencode")
 
 ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+EVID_PDF_IGNORE = "evid/**/*.pdf"  # evid's documents stay on disk; their labels and metadata are the work
 
 # A case id names a folder, so it is ASCII. What a person types is folded to that: "manosfæren"
 # becomes "manosfaeren", and `create` points at the folded form instead of only refusing.
@@ -70,7 +71,8 @@ background: the user's saves as `user:`, other changes as `agent:`.
 
 - Read only the evid sets linked in `workbench.yml` (`evid -h` to discover the CLI).
   Global sets are the evid store. Local sets, including PDFs handed off from a did
-  set, are `evid/` in this workdir (`evid --db evid`).
+  set, are `evid/` in this workdir (`evid --db evid`). The documents themselves
+  (`evid/**/*.pdf`) are not in git: the labels, metadata and extracted text are.
 - Quote only through labquote keys (`#blockq(<key>)`, `#inlineq`, `#cite-ref`). Never retype a quote.
 - Citations: this case has exactly one citation file, `refs/refs.yml` at the root of this
   workdir. Every `.typ`, in any folder, loads it as `#setup(yaml("/refs/refs.yml"))`.
@@ -290,7 +292,10 @@ def create(cid: str, name: str = "", template: str = "blank") -> Case:
         (workdir / keep / ".gitkeep").write_text("", "utf-8")
     (workdir / OUT).mkdir()  # in .gitignore
     # evid's lock files and vector index sit inside evid/; its sets here have no .gitignore of their own.
-    (workdir / ".gitignore").write_text(f"{OUT}/\n.pull-state.json\n.labels.lock\n.feedback.lock\nvecdb/\n", "utf-8")
+    # The stored PDFs stay on disk untracked: the labels, metadata and extracted text are the work.
+    (workdir / ".gitignore").write_text(
+        f"{OUT}/\n.pull-state.json\n.labels.lock\n.feedback.lock\nvecdb/\n{EVID_PDF_IGNORE}\n", "utf-8"
+    )
     _git(workdir, "init", "-q")
     _git(workdir, "add", CONFIG_NAME, "AGENTS.md", "main.typ", f"{DOCS}/.gitkeep", f"{REFS_EXTRA}/.gitkeep", ".gitignore")
     _git(workdir, "commit", "-q", "-m", f"workbench: new case {cid}" + ("" if t.key == "blank" else f" ({t.key})"))

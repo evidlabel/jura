@@ -26,6 +26,10 @@ from pathlib import Path
 IDLE = 5.0
 PERIOD = 1.5
 NOTES = {".juranotes.json", "notes/.juranotes.json", ".treenotes.json", "notes/.treenotes.json"}  # old name: its rename
+# The same line cases.create() writes (workbench/cases.py: EVID_PDF_IGNORE). evid's stored documents
+# stay on disk untracked; the labels, metadata and extracted text are the work git keeps.
+EVID_PDF_IGNORE = "evid/**/*.pdf"
+EVID_RULE_COMMIT = "workbench: keep evid PDFs out of git"
 
 
 def git(root: Path, *args: str, check: bool = True) -> str:
@@ -62,6 +66,7 @@ class AutoGit:
         self.error = ""
         self.last: dict | None = None
         self.enabled = self.is_repo()
+        self.migrated = False
         self.stopped = threading.Event()
 
     def is_repo(self) -> bool:
@@ -78,6 +83,47 @@ class AutoGit:
         g = self.root / ".git"
         return any((g / n).exists() for n in ("MERGE_HEAD", "rebase-merge", "rebase-apply", "CHERRY_PICK_HEAD",
                                                "REVERT_HEAD", "index.lock"))
+
+    def migrate(self) -> bool:
+        """Bring a case made before EVID_PDF_IGNORE up to date: untrack the stored PDFs (the files stay
+        on disk) and record the rule in its .gitignore. False while git is busy or something is staged
+        (retry next tick, the same way tick() stands back from someone else's commit)."""
+        if self.busy():
+            return False
+        if git(self.root, "diff", "--cached", "--name-only").strip():
+            return False  # someone staged work: leave the index to them
+        try:
+            self.untrack_evid_pdfs()
+        except Exception as e:  # never let a migration stop the loop; say what broke
+            self.error = str(e)
+            print(f"workbench autogit: {e}", file=sys.stderr, flush=True)
+        self.migrated = True
+        return True
+
+    def untrack_evid_pdfs(self) -> bool:
+        """True when it changed anything. A case with no evid/ folder is left alone."""
+        if not (self.root / "evid").is_dir():
+            return False
+        tracked = [
+            p for p in git(self.root, "ls-files", "-z", "--", "evid").split("\0") if p.lower().endswith(".pdf")
+        ]
+        ignore = self.root / ".gitignore"
+        try:
+            lines = ignore.read_text("utf-8").splitlines()
+        except OSError:
+            lines = []
+        rule = EVID_PDF_IGNORE not in (line.strip() for line in lines)
+        if not tracked and not rule:
+            return False
+        if rule:
+            ignore.write_text("\n".join([*lines, EVID_PDF_IGNORE]) + "\n", "utf-8")
+            git(self.root, "add", "--", ".gitignore")
+        if tracked:
+            git(self.root, "rm", "-q", "--cached", "--", *tracked)
+        # The index holds only this housekeeping (migrate() checked): a plain commit is exact. A
+        # pathspec commit would take the PDFs back from the worktree, where they deliberately stay.
+        git(self.root, "commit", "-q", "--no-verify", "-m", EVID_RULE_COMMIT)
+        return True
 
     def status(self) -> list[tuple[str, str]]:
         """(XY, path) for every change, renames as their new path."""
@@ -97,6 +143,9 @@ class AutoGit:
     def _loop(self) -> None:
         while not self.stopped.wait(self.period):
             try:
+                if not self.migrated:
+                    self.migrate()
+                    continue
                 self.tick()
             except Exception as e:  # never let the thread die; say what broke
                 self.error = str(e)

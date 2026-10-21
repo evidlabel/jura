@@ -597,6 +597,41 @@ def test_autogit_stands_back(case):
     assert g.tick(now=500)["who"] == "agent"
 
 
+def test_autogit_keeps_evid_pdfs_out_of_git(case):
+    """A case made before the rule tracked its stored PDFs. The migration untracks them (the files
+    stay on disk), records the rule, and later handoffs leave only the labels and metadata in git."""
+    pdf = case / "evid" / "plain" / "set" / "docs" / "abc" / "original.pdf"
+    pdf.parent.mkdir(parents=True)
+    pdf.write_bytes(b"%PDF-1.4\n")
+    (pdf.parent / "info.yml").write_text("title: x\n")
+    subprocess.run(["git", "-C", str(case), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(case), "commit", "-qm", "old behaviour"], check=True)
+
+    g = autogit.AutoGit(WS(case))
+    assert g.migrate() and g.migrated  # called from the autogit loop at the first idle tick
+    tracked = subprocess.run(["git", "-C", str(case), "ls-files"], capture_output=True, text=True).stdout
+    assert "original.pdf" not in tracked and "info.yml" in tracked
+    assert pdf.is_file()  # the document itself stays
+    assert autogit.EVID_PDF_IGNORE in (case / ".gitignore").read_text()
+    assert autogit.EVID_RULE_COMMIT in log(case)
+    assert g.status() == [] and g.migrated
+
+    # a set handed off later: the PDF is ignored, the work beside it is not
+    later = case / "evid" / "plain" / "set" / "docs" / "def"
+    (later / "label").mkdir(parents=True)
+    (later / "original.pdf").write_bytes(b"%PDF-1.4\n")
+    (later / "label" / "labels.json").write_text("{}\n")
+    assert g.status() == [("??", "evid/plain/set/docs/def/label/labels.json")]
+
+
+def test_autogit_leaves_a_case_without_evid_alone(case):
+    g = autogit.AutoGit(WS(case))
+    assert g.migrate() and g.migrated
+    ignore = case / ".gitignore"
+    assert not ignore.exists() or autogit.EVID_PDF_IGNORE not in ignore.read_text()
+    assert log(case)[0] == "start"
+
+
 def test_tag_state(case):
     g = autogit.AutoGit(WS(case))
     (case / "brief.typ").write_text("= Brief\n")

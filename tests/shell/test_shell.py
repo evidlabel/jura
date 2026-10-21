@@ -38,6 +38,9 @@ def test_create_case(roots):
     for name in ("workbench.yml", "AGENTS.md", "main.typ", ".gitignore", "docs/.gitkeep", "refs/extra/.gitkeep"):
         assert (c.workdir / name).is_file()
     assert (c.workdir / "out").is_dir() and not (c.workdir / "steering.typ").exists()
+    # evid's documents stay out of git; their labels, metadata and text do not
+    ignore = (c.workdir / ".gitignore").read_text()
+    assert cases.EVID_PDF_IGNORE in ignore and "vecdb/" in ignore
     for name in ("case.toml", "sources.yml", "skills.yml", "evid.yml"):
         assert not (c.workdir / name).exists()
     assert not (roots / "did" / "2026-014").exists()
