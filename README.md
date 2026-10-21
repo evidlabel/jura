@@ -21,6 +21,11 @@ Write agent · Datasets app · Anonymization app
 
 Ctrl+PageDown and Ctrl+PageUp cycle the tabs, from anywhere in the window. Ctrl+W and Ctrl+Q quit the window. In a terminal, Ctrl+W stays delete-word.
 
+The case button lists every case, most recently changed first, with a filter over id and name
+(`↑`/`↓` and `Enter` pick): a history of hundreds stays one keystroke away. A case id is a
+folder name, so it is ASCII: letters a–z, digits, `.`, `_` and `-`. Typing `manosfæren` folds
+to `manosfaeren` (æ→ae, ø→oe, å→aa); the display name keeps the æ.
+
 ## The flow
 
 1. `jura case new 2026-014 "Tenancy dispute"` creates `~/cases/2026-014/`, the git-tracked workdir (`workbench.yml`, `AGENTS.md`, `main.typ`, and empty `docs/`, `refs/extra/` and `out/`). Its agents are Claude, Codex, Grok and OpenCode. One that is not installed is greyed out in the Agent menu. It does not create a did folder and it does not create a global evid set.

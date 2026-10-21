@@ -6,6 +6,7 @@ import subprocess
 import sys
 import threading
 import time
+from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -80,6 +81,16 @@ def test_create_case_rejects(roots, monkeypatch):
     monkeypatch.setenv("WORKBENCH_DID", str(roots / "cases" / "did"))
     with pytest.raises(ValueError, match="must not be under the cases root"):
         cases.create("b", "b")
+
+
+def test_slug_folds_a_typed_id_to_ascii():
+    assert cases.slug("manosfæren") == "manosfaeren"
+    assert cases.slug("Ørsted-sagen") == "Oersted-sagen"
+    assert cases.slug("2026-014 Tenancy") == "2026-014-Tenancy"
+    assert cases.slug("Café") == "Cafe"
+    assert cases.slug(" ../x ") == "x" and cases.slug("???") == ""
+    with pytest.raises(ValueError, match="'manosfaeren'"):
+        cases.create("manosfæren", "x")  # the error points at the id the UI would have sent
 
 
 # ---------- supervisor ----------
@@ -175,6 +186,8 @@ def test_shell_page_and_static(shell):
     assert b'data-tab="sources"' not in page and b"/api/quit" in page and b"workbench-quit" in page
     assert b'data-pane="preview"' not in page and b'data-pane="skills"' in page and b'data-pane="queue"' in page
     assert b'id="agents"' in page and b"workbench-panes" in page and b"workbench-agents" in page and b"workbench-agent" in page
+    # a long history: the picker filters, and the id field says what it will fold
+    assert b'id="casefind"' in page and b'id="casecount"' in page and b'id="nc-idhint"' in page and b'id="st-idhint"' in page
     # Focus lives in the Write editor bar now, not the shell
     assert b'id="b-focus"' not in page and b"workbench-focus" not in page
     # both subtabs are told to hide their own agent panes, and evid follows the case
@@ -220,6 +233,25 @@ def test_new_case_starts_write(shell):
         assert json.loads(r.read())["root"] == "2026-014"
     assert call(shell, "POST", "/api/case/new", {"id": "2026-014"})[0] == 400
     assert call(shell, "POST", "/api/case/select", {"id": "nope"})[0] == 404
+
+
+def test_new_case_opens_the_folded_id(shell, roots):
+    """The picker folds a typed id before it posts ("manosfæren" → "manosfaeren"): the case that
+    opens is the one in the list, in the workdir, and the display name keeps the æ."""
+    status, body = call(shell, "POST", "/api/case/new", {"id": "manosfaeren", "name": "Manosfæren"})
+    state = json.loads(body)
+    assert status == 200 and state["current"] == "manosfaeren"
+    assert [(c["id"], c["name"]) for c in state["cases"]] == [("manosfaeren", "Manosfæren")]
+    assert Path(state["cases"][0]["workdir"]) == (roots / "cases" / "manosfaeren").resolve()
+    # it is open: its Write tab serves that workdir, and a window that starts again lands on it
+    tab = json.loads(call(shell, "GET", "/api/tab?tab=write&case=manosfaeren")[1])
+    assert tab["url"].startswith("http://127.0.0.1:")
+    with urlopen(tab["url"] + "api/tree", timeout=10) as r:
+        assert json.loads(r.read())["root"] == "manosfaeren"
+    assert json.loads(call(shell, "GET", "/api/state")[1])["current"] == "manosfaeren"
+    # an un-folded id (an agent or a script) is refused with the id the window would have sent
+    status, body = call(shell, "POST", "/api/case/new", {"id": "manosfæren"})
+    assert status == 400 and "manosfaeren" in json.loads(body)["error"]
 
 
 def test_missing_app_reports(shell):

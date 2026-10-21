@@ -67,12 +67,22 @@ header { background: var(--nav); border-bottom: 1px solid var(--line); padding: 
 #casebtn { min-height: 42px; font-size: 16px; font-weight: 600; gap: 10px; }
 #casebtn .mono { font-size: 13px; font-weight: 400; color: var(--muted); }
 .picker { position: relative; }
-#casemenu { position: absolute; top: 48px; left: 0; z-index: 20; width: 360px; padding: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px hsla(222,30%,10%,.16); }
+#casemenu { position: absolute; top: 48px; left: 0; z-index: 20; width: 380px; max-height: min(72vh, 620px); padding: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px hsla(222,30%,10%,.16); display: flex; flex-direction: column; }
+#casemenu[hidden] { display: none; }
+#casefind { flex: none; min-height: 34px; margin: 0 0 4px; padding: 0 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); font: inherit; }
+#casefind:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+#caselist { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+#casecount { flex: none; margin: 2px 0 0; padding: 0 6px; font-size: 11.5px; color: var(--muted); }
+#caselist .none { display: block; color: var(--muted); cursor: default; font-size: 13px; }
 .mi { width: 100%; display: flex; justify-content: space-between; gap: 16px; align-items: center; min-height: 42px; padding: 0 12px; border: 0; background: none; border-radius: 6px; cursor: pointer; text-align: left; }
-.mi:hover, .mi.on { background: var(--accent-low); }
+.mi:hover, .mi.on, .mi.act { background: var(--accent-low); }
+.mi.act { box-shadow: inset 0 0 0 2px var(--accent); }
+.mi span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mi .mono { font-size: 12px; color: var(--muted); }
 #newcase { border-top: 1px solid var(--line); margin-top: 6px; padding: 8px 6px 4px; display: grid; gap: 6px; }
 #newcase input, #newcase select, #start input { border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 6px; min-height: 34px; padding: 0 10px; }
+.field { display: grid; gap: 3px; }
+.idhint { font-size: 11.5px; line-height: 1.35; color: var(--muted); }
 .spacer { flex: 1; }
 #needs { color: var(--err); }
 #alpha { font-family: var(--mono); font-weight: 500; letter-spacing: 0; text-transform: none; }
@@ -137,12 +147,17 @@ main { flex: 1; position: relative; min-height: 0; }
     <button type="button" class="alpha" id="needs" title="A tool the workbench needs is missing or too old: About" hidden>update</button>
     <span class="slash" aria-hidden="true">/</span>
     <div class="picker">
-      <button class="btn" id="casebtn" aria-haspopup="listbox" aria-expanded="false"><span id="casename">No case</span><span class="mono" id="caseid"></span>
+      <button class="btn" id="casebtn" aria-haspopup="dialog" aria-controls="casemenu" aria-expanded="false"><span id="casename">No case</span><span class="mono" id="caseid"></span>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
-      <div id="casemenu" role="listbox" aria-label="Cases" hidden>
-        <div id="caselist"></div>
+      <div id="casemenu" role="dialog" aria-label="Cases" hidden>
+        <input id="casefind" type="search" placeholder="Find a case: id or name" aria-label="Find a case" autocomplete="off" spellcheck="false">
+        <div id="caselist" role="listbox" aria-label="Cases"></div>
+        <p id="casecount" aria-live="polite"></p>
         <form id="newcase">
-          <input id="nc-id" placeholder="Case id, e.g. 2026-015" required pattern="[A-Za-z0-9][A-Za-z0-9._\-]{0,63}" aria-label="Case id">
+          <div class="field">
+            <input id="nc-id" placeholder="Case id, e.g. 2026-015" required pattern="[A-Za-z0-9][A-Za-z0-9._\-]{0,63}" aria-label="Case id" title="Letters a–z, digits, &quot;.&quot;, &quot;_&quot; or &quot;-&quot;; æ becomes ae, ø oe, å aa.">
+            <span class="idhint" id="nc-idhint">a–z, 0–9, . _ - · æ→ae, ø→oe, å→aa</span>
+          </div>
           <input id="nc-name" placeholder="Name (default: the template's)" aria-label="Case name">
           <select id="nc-tpl" aria-label="What the case map starts with"></select>
           <button class="btn primary" type="submit">+ New case</button>
@@ -193,7 +208,7 @@ main { flex: 1; position: relative; min-height: 0; }
     <h2>Start a case</h2>
     <p>A case is a folder on this machine, tracked in git. Its map, <span class="mono">main.typ</span>, states the question. Pick what it starts with; you can change all of it.</p>
     <div class="needs" id="start-needs" hidden><b>Some tools are missing or too old:</b><ul></ul>Run <span class="mono">jura setup</span> in a terminal: it installs them and asks before sudo.</div>
-    <label>Case id<input id="st-id" required pattern="[A-Za-z0-9][A-Za-z0-9._\-]{0,63}" autocomplete="off"></label>
+    <label>Case id<input id="st-id" required pattern="[A-Za-z0-9][A-Za-z0-9._\-]{0,63}" autocomplete="off" title="Letters a–z, digits, &quot;.&quot;, &quot;_&quot; or &quot;-&quot;; æ becomes ae, ø oe, å aa."><span class="idhint" id="st-idhint">a–z, 0–9, . _ - · æ→ae, ø→oe, å→aa</span></label>
     <div id="tpls" role="group" aria-label="What the case map starts with"></div>
     <p class="kind">Personal files stay in the anonymization folder, outside the case. Only placeholders reach it.</p>
   </form></div>
@@ -203,7 +218,7 @@ main { flex: 1; position: relative; min-height: 0; }
 </main>
 <script>
 const $ = s => document.querySelector(s);
-const S = { state: null, tab: 'write', frames: {}, origins: {}, theme: 'system' };
+const S = { state: null, tab: 'write', frames: {}, origins: {}, theme: 'system', active: -1 };
 const store = (k, v) => { try { localStorage.setItem('wb.' + k, JSON.stringify(v)); } catch (e) {} };
 const load = (k, d) => { try { const v = localStorage.getItem('wb.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } };
 
@@ -244,25 +259,97 @@ $('#theme').onchange = e => { S.theme = e.target.value; store('theme', S.theme);
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (S.theme === 'system') applyTheme(); });
 
 // ---------- cases ----------
+// The id is a folder name, so it is ASCII: the same rule as cases.ID_RE and cases.slug() in Python.
+// A typed id is shown folded ("manosfæren" becomes "manosfaeren") and the display name stays free text.
+const ID_OK = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+const ID_HINT = 'a–z, 0–9, . _ - · æ→ae, ø→oe, å→aa';
+const ID_FOLD = { 'æ': 'ae', 'Æ': 'AE', 'ø': 'oe', 'Ø': 'Oe', 'å': 'aa', 'Å': 'Aa', 'ß': 'ss', 'œ': 'oe', 'Œ': 'Oe', 'ð': 'd', 'Ð': 'D', 'þ': 'th', 'Þ': 'Th', 'ł': 'l', 'Ł': 'L' };
+function slugId(raw) {
+  let s = String(raw).normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[æÆøØåÅßœŒðÐþÞłŁ]/g, c => ID_FOLD[c]);
+  s = s.trim().replace(/[\s/\\]+/g, '-').replace(/[^A-Za-z0-9._-]/g, '').replace(/^[^A-Za-z0-9]+/, '');
+  return s.slice(0, 64);
+}
+function bindId(input, hint) {
+  // Fold as it is typed, so the field always shows the id that will be created and the browser's
+  // opaque "Match the requested format" bubble never comes up. The display name stays free text.
+  input.addEventListener('input', () => {
+    const typed = input.value, clean = slugId(typed);
+    if (clean !== typed && (clean || !typed.trim())) input.value = clean;
+    input.setCustomValidity(ID_OK.test(clean) ? '' : 'Case id: start with a letter or digit; then letters, digits, ".", "_" or "-".');
+  });
+  hint.textContent = ID_HINT;
+}
+function fold(s) {
+  return String(s).normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[æÆøØåÅ]/g, c => ID_FOLD[c]).toLowerCase();
+}
 function current() { return S.state && S.state.cases.find(c => c.id === S.state.current); }
+const LIST_MAX = 200;  // rows drawn at a time; a history of thousands still opens at once
+function caseHits(q) {
+  const words = fold(q).split(/\s+/).filter(Boolean);
+  return S.state.cases
+    .filter(k => { const hay = fold(k.id + ' ' + k.name); return words.every(w => hay.includes(w)); })
+    .sort((a, b) => (b.updated - a.updated) || a.id.localeCompare(b.id));  // the history's recent end first
+}
 function renderCases() {
   const c = current();
   $('#casename').textContent = c ? c.name : 'No case';
   $('#caseid').textContent = c ? c.id : '';
   $('#empty').hidden = !!c;
   renderStart();
+  const find = $('#casefind'), q = find ? find.value.trim() : '';
+  const total = S.state.cases.length, hits = caseHits(q), shown = hits.slice(0, LIST_MAX);
   const list = $('#caselist'); list.textContent = '';
-  for (const k of S.state.cases) {
+  shown.forEach((k, i) => {
     const b = document.createElement('button');
+    b.type = 'button'; b.id = 'case-opt-' + i;
     b.className = 'mi' + (c && k.id === c.id ? ' on' : ''); b.setAttribute('role', 'option');
     b.setAttribute('aria-selected', String(!!c && k.id === c.id));
     b.innerHTML = '<span></span><span class="mono"></span>';
     b.firstChild.textContent = k.name; b.lastChild.textContent = k.id;
     b.onclick = () => selectCase(k.id);
     list.append(b);
+  });
+  if (!hits.length) {
+    const p = document.createElement('p');
+    p.className = 'mi none';
+    p.textContent = q ? `No case matches “${q}”. Create it below.` : 'No cases yet. Create one below.';
+    list.append(p);
   }
+  S.active = -1;
+  if (find) find.removeAttribute('aria-activedescendant');
+  $('#casecount').textContent = !total ? 'No cases yet'
+    : hits.length === total ? `${total} ${total === 1 ? 'case' : 'cases'} · recent first`
+    : `${hits.length} of ${total} match` + (shown.length < hits.length ? ` · showing ${shown.length}` : '');
 }
-function menu(open) { $('#casemenu').hidden = !open; $('#casebtn').setAttribute('aria-expanded', String(open)); }
+function menu(open) {
+  const m = $('#casemenu'), find = $('#casefind');
+  if (open && m.hidden) {
+    find.value = ''; renderCases(); m.hidden = false; find.focus();
+    const on = $('#caselist .mi.on'); if (on) on.scrollIntoView({ block: 'center' });
+  } else if (!open) {
+    const hadFocus = m.contains(document.activeElement);
+    m.hidden = true;
+    if (find.value) { find.value = ''; renderCases(); }
+    if (hadFocus) $('#casebtn').focus();
+  }
+  $('#casebtn').setAttribute('aria-expanded', String(!m.hidden));
+}
+$('#casefind').addEventListener('input', renderCases);
+$('#casefind').addEventListener('keydown', e => {
+  const items = [...$('#caselist').querySelectorAll('.mi')];
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (!items.length) return;
+    S.active = (S.active < 0 ? (e.key === 'ArrowDown' ? 0 : items.length - 1) : S.active + (e.key === 'ArrowDown' ? 1 : -1));
+    S.active = (S.active + items.length) % items.length;
+    items.forEach((b, i) => b.classList.toggle('act', i === S.active));
+    items[S.active].scrollIntoView({ block: 'nearest' });
+    e.currentTarget.setAttribute('aria-activedescendant', items[S.active].id);
+  } else if (e.key === 'Enter') {
+    const pick = items[S.active] || (items.length === 1 ? items[0] : null);
+    if (pick) { e.preventDefault(); pick.click(); }
+  }
+});
 $('#casebtn').onclick = e => { e.stopPropagation(); menu($('#casemenu').hidden); };
 document.addEventListener('click', e => { if (!e.target.closest('.picker')) menu(false); });
 document.addEventListener('keydown', e => {
@@ -290,13 +377,17 @@ function quit() {
 }
 $('#newcase').onsubmit = async e => {
   e.preventDefault();
+  $('#nc-id').value = slugId($('#nc-id').value);
   try {
     S.state = await api('POST', '/api/case/new', { id: $('#nc-id').value.trim(), name: $('#nc-name').value.trim(), template: $('#nc-tpl').value });
     S.fresh = S.state.current; store('case', S.state.current);
     $('#nc-id').value = $('#nc-name').value = '';
+    $('#nc-id').dispatchEvent(new Event('input'));
     menu(false); caseChanged();
   } catch (err) { alert(err.message); }
 };
+bindId($('#nc-id'), $('#nc-idhint'));
+bindId($('#st-id'), $('#st-idhint'));
 // The empty window: one click on a template makes the case.
 const TPL_NOTE = { blank: 'An empty map: the question, the line and what is open.', rent: 'Was a rent increase validly notified?', family: 'What contact arrangement to ask for.', tax: 'Was a reassessment made in time?' };
 function nextId() {
@@ -319,6 +410,7 @@ function renderStart() {
 $('#start').onsubmit = async e => {
   e.preventDefault();
   const template = (e.submitter && e.submitter.value) || 'blank';
+  $('#st-id').value = slugId($('#st-id').value);
   try {
     S.state = await api('POST', '/api/case/new', { id: $('#st-id').value.trim(), template });
     S.fresh = S.state.current; store('case', S.state.current); caseChanged();

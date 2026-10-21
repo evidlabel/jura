@@ -22,6 +22,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -40,6 +41,27 @@ from workbench.layout import DOCS, LAYOUT, OUT, REFS_EXTRA
 DEFAULT_AGENTS = ("claude", "codex", "grok", "opencode")
 
 ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+
+# A case id names a folder, so it is ASCII. What a person types is folded to that: "manosfæren"
+# becomes "manosfaeren", and `create` points at the folded form instead of only refusing.
+_FOLD = str.maketrans(
+    {
+        "æ": "ae", "Æ": "AE", "ø": "oe", "Ø": "Oe", "å": "aa", "Å": "Aa", "ß": "ss",
+        "œ": "oe", "Œ": "Oe", "ð": "d", "Ð": "D", "þ": "th", "Þ": "Th", "ł": "l", "Ł": "L",
+    }
+)
+
+
+def slug(text: str) -> str:
+    """A usable case id from what a person typed: fold æ/ø/å and accents to ASCII, spaces to '-',
+    drop the rest, and start at the first letter or digit. '' when nothing usable is left."""
+    s = unicodedata.normalize("NFKD", text.translate(_FOLD))
+    s = "".join(ch for ch in s if not unicodedata.combining(ch)).strip()
+    s = re.sub(r"[\s/\\]+", "-", s)
+    s = re.sub(r"[^A-Za-z0-9._-]", "", s)
+    s = re.sub(r"^[^A-Za-z0-9]+", "", s)
+    return s[:64]
+
 
 AGENTS_MD = """# {id} · {name}
 
@@ -155,11 +177,22 @@ class Case:
     evid_set: str
     did_project: Path | None
 
+    def updated(self) -> float:
+        """When the case last changed on disk, for putting a long history in recency order. `.git/index`
+        moves on every commit, which is the closest cheap signal; a folder outside git falls back."""
+        for p in (self.workdir / ".git" / "index", self.workdir / CONFIG_NAME, self.workdir):
+            try:
+                return p.stat().st_mtime
+            except OSError:
+                continue
+        return 0.0
+
     def as_json(self) -> dict:
         return {
             "id": self.id,
             "name": self.name,
             "workdir": str(self.workdir),
+            "updated": int(self.updated()),
             "evidSet": self.evid_set,
             "didProject": str(self.did_project) if self.did_project else "",
         }
@@ -225,7 +258,11 @@ def create(cid: str, name: str = "", template: str = "blank") -> Case:
     t = templates.get(template)
     name = name or t.name or cid
     if not ID_RE.match(cid):
-        raise ValueError(f"bad case id {cid!r}: letters, digits, '.', '_' or '-'")
+        hint = slug(cid)
+        raise ValueError(
+            f"bad case id {cid!r}: letters, digits, '.', '_' or '-'"
+            + (f" (did you mean {hint!r}?)" if hint and hint != cid else "")
+        )
     workdir = cases_root() / cid
     if workdir.exists():
         raise FileExistsError(f"{workdir} already exists")
