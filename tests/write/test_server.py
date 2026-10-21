@@ -11,7 +11,7 @@ from urllib.request import Request, urlopen
 import pytest
 
 from workbench.write.core import Handler, Server, _ws, main
-from workbench.write.term import Sessions, ws_frame
+from workbench.write.term import Client, Sessions, Terminal, ws_frame
 
 
 @pytest.fixture
@@ -225,6 +225,45 @@ def test_terminal(server, monkeypatch, tree):
     s.close()
     term.stop()
     assert not term.alive
+
+
+def test_a_stalled_page_does_not_stall_the_terminal(tmp_path, monkeypatch):
+    """The pty must never wait for a page. A webview that stops reading (busy, reloading) would
+    otherwise fill its socket and block the pty reader, and the agent's own writes with it."""
+    from workbench.write import term as term_mod
+
+    monkeypatch.setattr(term_mod, "QUEUE_MAX", 128 * 1024)
+    slow_srv, slow_cli = socket.socketpair()
+    good_srv, good_cli = socket.socketpair()
+    slow_cli.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)  # this page never reads
+    got = bytearray()
+    lock = threading.Lock()
+
+    def drain():
+        while (chunk := good_cli.recv(65536)):
+            with lock:
+                got.extend(chunk)
+
+    threading.Thread(target=drain, daemon=True).start()
+    t = Terminal(str(tmp_path), {"SHELL": "/bin/sh", "PATH": os.environ.get("PATH", "")})
+    t.start()
+    slow, good = Client(slow_srv), Client(good_srv)
+    t.clients.update({slow, good})
+    try:
+        started = time.monotonic()
+        for _ in range(12):  # 768 KB of agent output, six times what the stalled page may queue
+            t._broadcast(b"x" * 65536)
+            time.sleep(0.01)
+        assert time.monotonic() - started < 2.0, "the pty waited for the stalled page"
+        deadline = time.time() + 10
+        while len(got) < 512 * 1024 and time.time() < deadline:
+            time.sleep(0.02)
+        assert len(got) >= 512 * 1024, f"the reading page got {len(got)} bytes of the burst"
+        assert not slow.send(1, b"still there"), "the stalled page was queued forever, not dropped"
+    finally:
+        t.stop()
+        slow_cli.close()
+        good_cli.close()
 
 
 def test_terminal_sessions(server, monkeypatch, tree):

@@ -4,6 +4,9 @@
 Standard library only (POSIX). The shell starts lazily on the first connection; with an agent
 preset (e.g. "claude") the command is typed into the shell, so quitting the agent leaves you at
 a prompt. Output is kept in a scrollback buffer and replayed when a page (re)connects.
+
+Each page has its own writer thread, so a page that stops reading (a busy webview) can never
+block the pty: the agent's writes would block behind it and the session would look hung.
 """
 
 from __future__ import annotations
@@ -14,13 +17,16 @@ import hashlib
 import json
 import os
 import signal
+import socket
 import struct
 import subprocess
 import termios
 import threading
+from collections import deque
 
 SCROLLBACK = 256 * 1024
 WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+QUEUE_MAX = 8 * 1024 * 1024  # bytes one page may lag behind by; past it the page is dropped
 
 
 # ---------- WebSocket (RFC 6455, just what a terminal needs) ----------
@@ -72,16 +78,68 @@ def ws_frame(op: int, payload: bytes) -> bytes:
 
 
 class Client:
+    """One page's terminal socket: frames are queued and written by this client's own thread.
+
+    The pty must never wait for a page. A webview that is busy (a big re-render, a reload, a
+    suspended window) stops reading, and a synchronous send there fills the socket and blocks the
+    pty reader - which blocks the agent's own writes, so the whole session looks hung. Past
+    QUEUE_MAX the page is dropped instead; it reconnects and gets the scrollback."""
+
     def __init__(self, sock):
-        self.sock, self.lock = sock, threading.Lock()
+        self.sock = sock
+        self.cond = threading.Condition()
+        self.q: deque = deque()
+        self.pending = 0
+        self.closed = False
+        self.thread = threading.Thread(target=self._write, name="term-write", daemon=True)
+        self.thread.start()
 
     def send(self, op: int, payload: bytes) -> bool:
+        with self.cond:
+            if self.closed:
+                return False
+            self.q.append((op, payload))
+            self.pending += len(payload)
+            if self.pending > QUEUE_MAX:
+                self._shut()
+                return False
+            self.cond.notify()
+        return True
+
+    def _shut(self) -> None:
+        """Drop the queue and wake a writer stuck in sendall; the socket's read side ends too."""
+        self.closed = True
+        self.q.clear()
+        self.pending = 0
+        self.cond.notify()
         try:
-            with self.lock:
-                self.sock.sendall(ws_frame(op, payload))
-            return True
+            self.sock.shutdown(socket.SHUT_RDWR)
         except OSError:
-            return False
+            pass
+
+    def close(self) -> None:
+        with self.cond:
+            self.closed = True
+            self.cond.notify()
+        try:
+            self.sock.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+
+    def _write(self) -> None:
+        while True:
+            with self.cond:
+                while not self.q and not self.closed:
+                    self.cond.wait()
+                if not self.q:
+                    return  # closed and drained, or closed by the page
+                op, payload = self.q.popleft()
+                self.pending -= len(payload)
+            try:
+                self.sock.sendall(ws_frame(op, payload))
+            except OSError:
+                self.close()
+                return
 
 
 # ---------- the shared terminal ----------
@@ -172,7 +230,8 @@ class Terminal:
             clients = list(self.clients)
         for c in clients:
             if not c.send(2, chunk):
-                self.clients.discard(c)
+                with self.lock:
+                    self.clients.discard(c)
 
     def write(self, data: bytes) -> None:
         if self.master is not None:
@@ -243,6 +302,7 @@ class Terminal:
                     self.restart()
         finally:
             self.clients.discard(client)
+            client.close()
 
 
 # ---------- the sessions of the pane ----------
