@@ -117,6 +117,14 @@ class Extras:
 
     # ---------- the sandbox, read at every terminal start ----------
     def wrap(self):
+        return self._wrap(chdir=True)
+
+    def sandbox_argv(self) -> dict:
+        """The prefix a terminal of another app starts under: same walls, its own cwd."""
+        prefix, _env = self._wrap(chdir=False)
+        return {"argv": prefix, "sandboxed": bool(prefix)}
+
+    def _wrap(self, chdir: bool):
         env = {**self.base_env}
         if not self.sandboxed:
             return [], env
@@ -135,6 +143,7 @@ class Extras:
             sources.global_slugs(sel),
             skills=skills.enabled_dirs(self.root),
             also=also,
+            chdir=chdir,
         )
         return prefix, sandbox.sandbox_env(env, evid_data)
 
@@ -162,6 +171,12 @@ class Extras:
             return True
         if method == "GET" and path == "/api/wb":
             h.send_json(200, self.cfg())
+            return True
+        if method == "GET" and path == "/api/sandbox":
+            # What a terminal of this case starts under, for the Datasets tab's Agent pane
+            # (evid asks the shell, the shell asks the open case's Write child). No --chdir:
+            # evid's terminal keeps its own folder (the set).
+            h.send_json(200, self.sandbox_argv())
             return True
         if method == "GET" and path in ("/api/pdf", "/api/pdf/info"):
             # Render a PDF page to an image: the app webview has no PDF viewer.

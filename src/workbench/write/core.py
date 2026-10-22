@@ -2021,7 +2021,7 @@ def serve(
     from .extras import Extras
 
     extras = Handler.extras = Extras(ws, env)
-    Handler.terms = Sessions(str(ws.root), env, agent, wrap=extras.wrap)
+    Handler.terms = Sessions(str(ws.root), env, agent.strip() or None, wrap=extras.wrap)
     extras.start()
 
     def stop(*_):

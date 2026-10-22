@@ -169,8 +169,12 @@ def bwrap_argv(
     did_root: Path | None = None,
     cases_root: Path | None = None,
     also: list[Path] | None = None,
+    chdir: bool = True,
 ) -> list[str]:
-    """The `bwrap ... --` prefix for one agent terminal of CASE_DIR."""
+    """The `bwrap ... --` prefix for one agent terminal of CASE_DIR.
+
+    ``chdir`` makes the terminal start in the case (the Write tab). A terminal of another app
+    keeps its own working directory (evid's Agent pane starts in the set's folder)."""
     home = home or Path.home()
     case_dir = case_dir.resolve()
     did_root = (did_root or Path(os.environ.get("WORKBENCH_DID") or home / "did_workdirs")).expanduser()
@@ -203,7 +207,9 @@ def bwrap_argv(
             if name and "/" not in name and not name.startswith(".") and src.is_dir():
                 a += ["--ro-bind", str(src), str(sk / name)]
 
-    a += ["--bind", str(case_dir), str(case_dir), "--chdir", str(case_dir)]
+    a += ["--bind", str(case_dir), str(case_dir)]
+    if chdir:
+        a += ["--chdir", str(case_dir)]
     return [*a, "--"]
 
 

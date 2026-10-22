@@ -267,7 +267,7 @@ def test_a_stalled_page_does_not_stall_the_terminal(tmp_path, monkeypatch):
 
 
 def test_terminal_sessions(server, monkeypatch, tree):
-    terms = Sessions(str(tree), {"SHELL": "/bin/sh", "PATH": os.environ.get("PATH", ""), "PS1": "$ "}, "")
+    terms = Sessions(str(tree), {"SHELL": "/bin/sh", "PATH": os.environ.get("PATH", ""), "PS1": "$ "}, None)
     monkeypatch.setattr(Handler, "terms", terms)
     assert call(server, "GET", "/api/terms")[1]["terms"] == []
     status, out = call(server, "POST", "/api/term/new", {"agent": "echo second-pane"})

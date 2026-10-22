@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -193,8 +194,8 @@ def test_shell_page_and_static(shell):
     assert b'id="casefind"' in page and b'id="casecount"' in page and b'id="nc-idhint"' in page and b'id="st-idhint"' in page
     # Focus lives in the Write editor bar now, not the shell
     assert b'id="b-focus"' not in page and b"workbench-focus" not in page
-    # both subtabs are told to hide their own agent panes, and evid follows the case
-    assert b"searchParams.set('embed', '1')" in page and b"tab !== 'did') u.searchParams" not in page
+    # did hides its own agent pane; evid keeps its Agent pane, sandboxed through this window
+    assert b"if (tab === 'did') u.searchParams.set('embed', '1')" in page
     assert b"['write', 'evid']" in page
     assert call(shell, "GET", "/static/fonts/jetbrains-mono-latin-400-normal.woff2")[0] == 200
     assert call(shell, "GET", "/static/fonts/source-sans-3-latin-300-normal.woff2")[0] == 200
@@ -238,6 +239,44 @@ def test_new_case_starts_write(shell):
     assert call(shell, "POST", "/api/case/select", {"id": "nope"})[0] == 404
 
 
+def test_sandbox_prefix_is_the_open_cases_write_child(shell, roots):
+    call(shell, "POST", "/api/case/new", {"id": "2026-014", "name": "Tenancy dispute"})
+    status, body = call(shell, "GET", "/api/sandbox")
+    out = json.loads(body)
+    assert status == 200 and set(out) == {"argv", "sandboxed"}
+    assert out["sandboxed"] == bool(out["argv"])
+    if os.environ.get("WORKBENCH_SANDBOX", "1") != "0" and shutil.which("bwrap"):
+        case_dir = (roots / "cases" / "2026-014").resolve()
+        assert out["argv"][0] == "bwrap" and out["argv"][-1] == "--"
+        assert str(case_dir) in out["argv"]  # bound read-write
+        assert "--chdir" not in out["argv"]  # the caller's own folder stays (evid starts in the set)
+    else:
+        assert out["argv"] == []
+
+
+def test_sandbox_prefix_needs_a_case(shell):
+    status, body = call(shell, "GET", "/api/sandbox")
+    assert status == 404 and "no case" in json.loads(body)["error"]
+
+
+def test_sandbox_exec_runs_the_command_under_the_case_sandbox(shell, roots):
+    if os.environ.get("WORKBENCH_SANDBOX", "1") == "0" or not shutil.which("bwrap"):
+        pytest.skip("the sandbox is off here")
+    call(shell, "POST", "/api/case/new", {"id": "2026-014", "name": "Tenancy dispute"})
+    case_dir = (roots / "cases" / "2026-014").resolve()
+    r = subprocess.run(
+        [sys.executable, "-m", "workbench.sandbox_exec", "/bin/sh", "-c", "echo sandbox-ok; pwd"],
+        cwd=str(case_dir),
+        env={**os.environ, "WORKBENCH_SHELL_URL": shell},
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert r.returncode == 0, r.stderr
+    assert "sandbox-ok" in r.stdout
+    assert r.stdout.strip().splitlines()[-1] == str(case_dir)  # its own folder, as evid's set is
+
+
 def test_new_case_opens_the_folded_id(shell, roots):
     """The picker folds a typed id before it posts ("manosfæren" → "manosfaeren"): the case that
     opens is the one in the list, in the workdir, and the display name keeps the æ."""
@@ -274,10 +313,16 @@ def test_evid_launch_replaces_a_running_gui(monkeypatch):
     class Fake(server.Child):
         def start(self):
             captured["argv"] = self.argv
+            captured["env"] = self.env
 
     monkeypatch.setattr(server, "Child", Fake)
-    server.Workbench().evid_child()
+    wb = server.Workbench()
+    wb.url = "http://127.0.0.1:8780/"
+    wb.evid_child()
     assert captured["argv"] == ["/bin/evid", "gui", "--headless", "--replace", "-p", "8790"]
+    # the Datasets tab's Agent pane asks this window for the open case's sandbox
+    assert captured["env"]["EVID_TERM_WRAP"].endswith("-m workbench.sandbox_exec")
+    assert captured["env"]["WORKBENCH_SHELL_URL"] == "http://127.0.0.1:8780/"
 
 
 def test_evid_tab_without_a_server_leaves_the_workdir_alone(shell, roots):

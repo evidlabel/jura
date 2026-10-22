@@ -16,7 +16,7 @@ Write agent · Datasets app · Anonymization app
 | Tab | What it is |
 |---|---|
 | **Write** `agent` | The case workdir as a tree you edit and annotate, a wrapped Typst editor with a tinymist preview beside it, and a stack of agents and terminals. The agents pane stays closed until you open a harness. Every change is committed in the background. |
-| **Datasets** `app` | evid: documents, labels, search, over the global evid store. |
+| **Datasets** `app` | evid: documents, labels, search, over the global evid store, plus the case's own `evid/`. Its Agent button opens a harness on one set; those terminals run in the case sandbox too. |
 | **Anonymization** `app` | did: create sets and add documents. The files stay outside the case, under `~/did_workdirs`. Write connects to those sets. |
 
 Ctrl+PageDown and Ctrl+PageUp cycle the tabs, from anywhere in the window. Ctrl+W and Ctrl+Q quit the window. In a terminal, Ctrl+W stays delete-word.
@@ -53,13 +53,15 @@ out of the text: they are keys into `refs/refs.yml`, drawn from the source at co
 
 ## Isolation
 
-Raw case files carry personal data. They stay in the did set, outside the case, and only the handed-off PDFs reach the case. Every terminal in Write runs in a bubblewrap sandbox. Inside, it is your usual terminal, as in treedit: your shell and its config, history, and every agent harness (claude, hermes, grok, opencode, codex, …) with its login and settings. Hidden from it:
+Raw case files carry personal data. They stay in the did set, outside the case, and only the handed-off PDFs reach the case. Every terminal in Write, and every terminal in the Datasets tab's Agent pane, runs in a bubblewrap sandbox. Inside, it is your usual terminal, as in treedit: your shell and its config, history, and every agent harness (claude, hermes, grok, opencode, codex, …) with its login and settings. Hidden from it:
 - did's folder (`~/did_workdirs`, or `$WORKBENCH_DID`), and the folders the raw files did has read came from (from each set's `draft/sources.json`). A raw file sitting directly in `$HOME` is hidden on its own.
 - The global evid sets the case did not link in `workbench.yml`. Local evid sets live in the workdir, so the sandbox shows them with the case.
 - The other cases.
 - Other projects' Claude Code transcripts, prompt history, file history and pastes. Each case keeps its own in `~/.local/state/workbench/claude/`.
 - Other programs' scratch files in `/tmp`. Each terminal gets its own `/tmp`.
 - Anything in `$WORKBENCH_SANDBOX_HIDE`.
+
+The Datasets tab's Agent pane belongs to evid's process, which serves every case. Its terminals ask this window for the open case's sandbox before they start (`EVID_TERM_WRAP` → `workbench.sandbox_exec`), so they get exactly the walls above.
 
 ## Install (alpha, Linux)
 

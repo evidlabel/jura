@@ -466,8 +466,9 @@ async function mount(tab, c) {
   }
   const u = new URL(r.url);
   u.searchParams.set('theme', tab === 'write' ? resolved() : scheme());  // Write has every theme; the others get the rest by message
-  // Both children hide their own agent pane: the Write tab owns the terminals.
-  u.searchParams.set('embed', '1');
+  // did hides its own agent pane: the Write tab owns the terminals. evid keeps its Agent pane
+  // (a harness on that set), and its terminals run in this case's sandbox via EVID_TERM_WRAP.
+  if (tab === 'did') u.searchParams.set('embed', '1');
   if (tab === 'evid' && c.evidSet) u.searchParams.set('set', c.evidSet);
   if (tab === 'write' && S.fresh === c.id) {  // a case just made here: open its map, with the preview
     u.searchParams.set('panes', 'preview'); u.hash = 'main.typ'; S.fresh = null;

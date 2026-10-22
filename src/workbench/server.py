@@ -23,6 +23,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import shlex
 import shutil
 import socket
 import subprocess
@@ -115,13 +116,44 @@ class Workbench:
         return self.sup.ensure(f"write:{case.id}", make)
 
     def evid_child(self) -> Child:
+        # The Datasets tab keeps evid's own Agent pane. evid serves every case, so the pane's
+        # terminals cannot know the case sandbox: EVID_TERM_WRAP sends each one through
+        # workbench.sandbox_exec, which asks this server for the current case's Write prefix.
         return self.sup.ensure(
             "evid",
             lambda: Child(
                 "evid",
                 [tool("evid"), *evid_db_args(), "gui", "--headless", "--replace", "-p", str(free_port(8790))],
+                env={
+                    "EVID_TERM_WRAP": f"{shlex.quote(sys.executable)} -m workbench.sandbox_exec",
+                    "WORKBENCH_SHELL_URL": self.url,
+                },
             ),
         )
+
+    def sandbox(self) -> dict:
+        """The bwrap prefix for a terminal on the current case: the Write child's own policy.
+
+        The Datasets tab's Agent pane runs in evid's process, which serves every case; the Write
+        child of the open case knows the case dir, the linked sets, the skills and did's paths.
+        """
+        with self.lock:
+            cid = self.current
+        if not cid:
+            raise HTTPError(404, "no case is open")
+        try:
+            case = cases.get(cid)
+        except KeyError:
+            raise HTTPError(404, "no case is open") from None
+        child = self.write_child(case)
+        url = child.wait_url(timeout=60)
+        if not url:
+            raise HTTPError(503, child.error or "the Write tab did not start")
+        try:
+            with urlopen(Request(url.rstrip("/") + "/api/sandbox"), timeout=60) as r:
+                return json.loads(r.read())
+        except (OSError, ValueError) as e:
+            raise HTTPError(503, f"the Write tab did not answer: {e}") from e
 
     def did_child(self) -> Child:
         root = cases.did_root()
@@ -302,6 +334,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, wb.state())
         if method == "GET" and path == "/api/tab":
             return self.send_json(200, self.tab_url(q.get("tab", ""), q.get("case", "")))
+        if method == "GET" and path == "/api/sandbox":
+            return self.send_json(200, wb.sandbox())
         if method == "POST" and path == "/api/case/select":
             return self.send_json(200, wb.select(str(self.body().get("id", ""))))
         if method == "POST" and path == "/api/case/new":

@@ -1,5 +1,9 @@
-# Derived from wr1/treedit at 94e6806 (MIT, Copyright (c) 2026 wr1); see src/workbench/write/LICENSE-treedit.txt.
-"""The agent terminal: one shell on a pseudo-terminal, shared by every connected page over WebSocket.
+# Vendored from evid's src/evid/web/term.py; keep the body identical so a sync is a tail replace.
+# (evid took it from wr1/treedit at 94e6806, MIT (c) 2026 wr1; see LICENSE-treedit.txt.)
+# fmt: off
+"""The agent pane's terminals: shells on pseudo-terminals, shared by every connected page over WebSocket.
+
+Taken from treedit (same author, MIT).
 
 Standard library only (POSIX). The shell starts lazily on the first connection; with an agent
 preset (e.g. "claude") the command is typed into the shell, so quitting the agent leaves you at
@@ -7,6 +11,9 @@ a prompt. Output is kept in a scrollback buffer and replayed when a page (re)con
 
 Each page has its own writer thread, so a page that stops reading (a busy webview) can never
 block the pty: the agent's writes would block behind it and the session would look hung.
+
+A terminal may take a ``wrap`` hook: ``() -> (argv prefix, env)``, read at every start. evid uses
+it for the sandbox (``evid.web.sandbox``); the workbench uses it for its case sandbox.
 """
 
 from __future__ import annotations
@@ -144,10 +151,11 @@ class Client:
 
 # ---------- the shared terminal ----------
 class Terminal:
-    def __init__(self, cwd: str, env: dict, agent: str = "", wrap=None, name: str = ""):
+    def __init__(self, cwd: str, env: dict, agent: str = "", wrap=None, name: str = "", on_change=None):
         self.cwd, self.env, self.agent = cwd, env, agent
         self.name = name  # the agent menu's row ("OpenCode · local"); the title instead of the command
-        self.wrap = wrap  # workbench: () -> (argv prefix, env) — the sandbox, read at every start
+        self.wrap = wrap  # () -> (argv prefix, env): the sandbox, read at every start
+        self.on_change = on_change  # called when the session starts or ends
         self.sandboxed = False
         self.lock = threading.Lock()
         self.clients: set = set()
@@ -197,6 +205,8 @@ class Terminal:
             threading.Thread(target=self._pump, args=(master, self.gen), daemon=True).start()
             if self.agent:
                 self.write((self.agent + "\r").encode())
+        if self.on_change:
+            self.on_change()
 
     def _winsize(self, fd: int) -> None:
         rows, cols = self.size
@@ -221,6 +231,8 @@ class Terminal:
         self._broadcast(b"\r\n\x1b[2m[session ended - Restart to start a new one]\x1b[0m\r\n")
         for c in list(self.clients):
             c.send(1, json.dumps({"t": "exit"}).encode())
+        if self.on_change:
+            self.on_change()
 
     def _broadcast(self, chunk: bytes) -> None:
         with self.lock:
@@ -308,23 +320,25 @@ class Terminal:
 # ---------- the sessions of the pane ----------
 class Sessions:
     """The terminals of the agent pane, in the order they were added: each its own shell or agent preset
-    on a pseudo-terminal, started in CWD with ENV. When AGENT is set, that terminal is created up front.
-    An empty agent starts with none, so the login shell does not run until the page adds one."""
+    on a pseudo-terminal, started in CWD with ENV. The first runs AGENT; more are added from the page."""
 
-    def __init__(self, cwd: str, env: dict, agent: str = "", wrap=None):
+    def __init__(self, cwd: str, env: dict, agent: str | None = "", on_change=None, wrap=None):
         self.cwd, self.env, self.wrap = cwd, env, wrap
+        self.on_change = on_change
         self.lock = threading.Lock()
         self.terms: dict = {}
         self.next = 1
-        if agent.strip():
+        if agent is not None:  # None: start empty; terminals are added from the page
             self.add(agent)
 
     def add(self, agent: str = "", name: str = "") -> str:
         with self.lock:
             sid = str(self.next)
             self.next += 1
-            self.terms[sid] = Terminal(self.cwd, self.env, agent.strip(), self.wrap, name.strip())
-            return sid
+            self.terms[sid] = Terminal(self.cwd, self.env, agent.strip(), self.wrap, name.strip(), self.on_change)
+        if self.on_change:
+            self.on_change()
+        return sid
 
     def get(self, sid: str):
         return self.terms.get(sid)
@@ -338,6 +352,8 @@ class Sessions:
         for c in list(t.clients):  # tell its pages the pane is gone
             c.send(1, json.dumps({"t": "closed"}).encode())
             c.send(8, b"")
+        if self.on_change:
+            self.on_change()
         return True
 
     def list(self) -> list:
