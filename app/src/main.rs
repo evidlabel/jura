@@ -5,6 +5,10 @@
 //!                                                   # when the window closes (WORKBENCH_BIN overrides `jura`)
 //!
 //! Touching the raise file brings the window to the front.
+//!
+//! On Linux the window reloads the page when WebKit's web process dies (a renderer crash used to
+//! leave it blank), and renders without WebKit's DMA-BUF path by default, which crashed that
+//! process on Intel/Wayland. `WORKBENCH_WEBKIT_DMABUF=1` asks for the accelerated path again.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::net::{TcpListener, TcpStream};
@@ -69,6 +73,33 @@ fn free_port() -> u16 {
         .unwrap_or(8780)
 }
 
+/// WebKitGTK kills the web process when a page crashes it (a segfault, or the renderer's memory
+/// limit) and then leaves the window blank. Everything the page shows lives on the server, so a
+/// reload brings the same case and tab back: a renderer crash costs a flash, not the window.
+/// A page that crashes every time is left alone after a few tries, so it cannot spin.
+#[cfg(target_os = "linux")]
+fn reload_after_renderer_crash(window: &tauri::WebviewWindow) {
+    use webkit2gtk::WebViewExt;
+
+    let seen: Mutex<Vec<Instant>> = Mutex::new(Vec::new());
+    let _ = window.with_webview(move |wv| {
+        let view = wv.inner();
+        view.connect_web_process_terminated(move |view, reason| {
+            let now = Instant::now();
+            let mut log = seen.lock().unwrap();
+            log.retain(|t| now.duration_since(*t) < Duration::from_secs(120));
+            log.push(now);
+            if log.len() > 3 {
+                eprintln!("workbench-app: web process keeps dying ({reason:?}); leaving the window as it is");
+                return;
+            }
+            eprintln!("workbench-app: web process terminated ({reason:?}); reloading the page");
+            drop(log);
+            view.reload();
+        });
+    });
+}
+
 fn start_server(bin: &str, args: &[String], port: u16, raise: &PathBuf) -> Child {
     let mut child = Command::new(bin)
         .args(args)
@@ -100,6 +131,14 @@ fn mtime(p: &PathBuf) -> Option<SystemTime> {
 }
 
 fn main() {
+    // WebKitGTK 2.52's DMA-BUF renderer has crashed this web process on Intel/Wayland: a libc
+    // segfault first, later "free(): corrupted unsorted chunks", and the window goes blank.
+    // Render through the plain path unless WORKBENCH_WEBKIT_DMABUF asks for the accelerated one.
+    // Set before GTK or WebKit is initialized, or it is read too late.
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("WORKBENCH_WEBKIT_DMABUF").is_none() {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
     let args: Vec<String> = std::env::args().skip(1).collect();
     let flag = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();
     let (url, raise, child) = match flag("--url") {
@@ -137,6 +176,8 @@ fn main() {
                 .build()?;
             #[cfg(target_os = "linux")]
             set_window_icon(&window, icon.as_deref());
+            #[cfg(target_os = "linux")]
+            reload_after_renderer_crash(&window);
             // Maximized fills the work area and leaves the title bar. Clear any
             // remembered exclusive fullscreen so the close button stays.
             let _ = window.set_fullscreen(false);

@@ -13,6 +13,7 @@ tauri = { version = "2", features = [] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = "0.18.2"
+webkit2gtk = "2.0"
 
 [profile.release]
 strip = true
