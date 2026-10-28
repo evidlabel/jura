@@ -31,34 +31,24 @@ to `manosfaeren` (æ→ae, ø→oe, å→aa); the display name keeps the æ.
 1. `jura case new 2026-014 "Tenancy dispute"` creates `~/cases/2026-014/`, the git-tracked workdir (`workbench.yml`, `AGENTS.md`, `main.typ`, and empty `docs/`, `refs/extra/` and `out/`). Its agents are Claude, Codex, Grok and OpenCode. One that is not installed is greyed out in the Agent menu. It does not create a did folder and it does not create a global evid set.
 2. In **Anonymization**, create a did set and add the case files. The set lives under `~/did_workdirs/<set>/`, outside the case. That same set shows up in Write.
 3. In **Write**, the Sources pane is two pools of pills. Evid pills (one color) link a global set or a local set under `evid/plain/`. Did pills (the other color) are the sets from Anonymization: connect one, and choose how the PDF is labelled (`placeholder` by default, or `faker`, `anon`, `pseudo`). Connecting a set writes those PDFs into this case's evid directory, `evid/anon/anon_set_<set>/`. **Hand off** writes them again. A connected did pill is marked stale when a document is added or the extracted keys change. **Gather** (or `jura gather`, for agents) writes one merged `refs/refs.yml` for the linked sets. It is the case's only citation file: any `.typ` file, in any folder, loads it as `yaml("/refs/refs.yml")`, and labquote prints only the entries it cites. Any other `refs.yml` in the case is not read, and Gather lists it as stray. Citations from outside evid (a lawcite statute, …) go in `refs/extra/*.yml`, which Gather merges in.
-4. Annotate files, folders and lines. In the **Queue**, choose which of your new edits and notes go to which agent, then **Roll**. A roll of several independent items is broken down by the top-level agent and handed to its subagents, each on the model and thinking budget the task needs; the Queue shows the tasks.
+4. Annotate files, folders and lines. In the **Queue**, choose which of your new edits and notes go to which agent, then **Roll**: the top-level agent splits them into tasks for its subagents, and the Queue shows them.
 5. **Tag state…** marks the current version (`state/<date>-<name>`).
 
 ## Why a queue
 
-An agent reads the case on every turn, and every token of it is paid for. Prompting one after
-each save sends the same files, the same annotations and the same instructions again and again,
-so most of what it reads is work it has already seen. The **Queue** holds the user's new edits,
-drafts, annotations and feedback since the last roll, and **Roll** sends them as one list: the
-harness is briefed once on a batch instead of once per keystroke, and nothing is sent twice.
+A roll sends what is new since the last roll — saves, drafts, annotations, feedback — as one list.
 
-It also lets the human stay where the work is. Writing, annotating and reading continue without
-a detour to write a prompt, and the notes accumulate on their own. The agent then answers
-against a larger body of the human's work rather than a sentence it has just been handed, and
-its questions land where the answer already is. Fewer, fuller turns: a focused human on one
-side, an agent with the whole picture on the other.
-
-A roll arrives as items, not as a paragraph, which changes what the receiving agent can do with
-it. The roll is sent to the top-level agent of a harness, and the queue is its brief: it reads
-the list once, breaks it into tasks along the files and the questions the items carry, and fans
-them out to subagents of its own harness, several at a time. The difficulty decides the
-resource: a rename, a typo or a moved line goes to a fast, cheap model, while the item that has
-to read a document or argue a point gets the strongest model and the longest thinking budget,
-and a task that needs the whole conversation stays with the top agent. The split is recorded
-with `jura write queue plan` and shows in the Queue beneath the items: task, effort, the
-subagent that took it. `done` and `drop` close it. A batch that used to be one prompt on one
-model becomes several turns inside the harness, each on the resource its difficulty asks for —
-the top-level agent as the scheduler, not a second one beside it.
+- **Fewer, fuller turns.** An agent reads the case on every turn, and every token is paid for. A
+  batch is briefed once instead of once per save, and nothing goes twice.
+- **The human stays in the work.** Writing, annotating and reading continue; notes pile up
+  instead of each turning into a prompt.
+- **The top-level agent schedules.** It breaks the list into tasks along the files and the
+  questions the items carry, and hands them to subagents of its own harness, several at a time.
+  Cheap work — a rename, a typo, a moved line — goes to a fast model; reading a document or
+  arguing a point gets the strongest model and the longest thinking budget. A task that needs the
+  whole conversation stays with the top agent.
+- **The split is visible.** `jura write queue plan` records it, and the Queue lists task, effort
+  and the subagent that took it; `done` and `drop` close each one.
 
 ## Where things go
 
@@ -66,16 +56,18 @@ A new case comes with one opinionated layout, written into its `AGENTS.md` so an
 
 ## Why Typst, and git
 
-Every document in a case is Typst: plain text with light markup, compiled to PDF. Git
-tracks plain text line by line, so the case's history is something to read rather than a
-list of saves. Each commit (yours as `user:`, an agent's as `agent:`) shows the sentences
-it changed, a diff between two tagged states is a redline, and `git blame` says who wrote a
-line. A `.docx` is a zipped binary to git: its history could only say that the file
-changed. Plain text is also what agents edit reliably, and the same source always gives
-the same PDF. Nobody has to learn Typst syntax to work in a case: nested plain-text bullet
-lists (`- point`, indented for sub-points) are already valid Typst, and the rest comes from
-annotating a file, a folder or a few lines and rolling the note to an agent. Quotes stay
-out of the text: they are keys into `refs/refs.yml`, drawn from the source at compile time.
+Every document in a case is Typst: plain text with light markup, compiled to PDF. Git turns
+that plain text into a history rather than a list of saves.
+
+- Each commit (yours as `user:`, an agent's as `agent:`) shows the sentences it changed.
+- A diff between two tagged states is a redline, and `git blame` says who wrote a line.
+- A `.docx` is a zipped binary: its history could only say that the file changed.
+- Plain text is what agents edit reliably, and the same source always gives the same PDF.
+- Nobody has to learn Typst first: nested plain-text bullet lists (`- point`, indented for
+  sub-points) are already valid Typst, and the rest comes from annotating a file, a folder or a
+  few lines and rolling the note to an agent.
+- Quotes stay out of the text: they are keys into `refs/refs.yml`, drawn from the source at
+  compile time.
 
 ## Isolation
 
