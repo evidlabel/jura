@@ -546,6 +546,41 @@ def test_queue_rolled(case):
     assert q["feedback"] == ["3", "4"] and len(q["history"]) == 2 and q["history"][0]["target"] == "opencode"
 
 
+def test_queue_plan_and_tasks(case):
+    """The scheduler agent's split: tasks with an effort and a row, then their outcome."""
+    queue.rolled(case, "claude", {}, [3], [{"key": "fb:3", "kind": "feedback", "id": 3, "path": "memo.typ"},
+                                        {"key": "edit:memo.typ", "kind": "edit", "path": "memo.typ"}])
+    assert queue.read(case)["tasks"] == []
+    q = queue.plan(case, [
+        {"id": "t1", "title": "tighten the memo", "items": ["fb:3"], "effort": "cheap", "agent": "OpenCode"},
+        {"title": "argue the point", "items": "edit:memo.typ", "effort": "expensive"},  # no id, unknown rung
+        "not a task",
+        {"title": ""},
+    ], by="claude")
+    assert [(t["id"], t["effort"], t["status"]) for t in q["tasks"]] == [("t1", "cheap", "open"), ("t2", "standard", "open")]
+    assert q["tasks"][1]["items"] == ["edit:memo.typ"]  # a single key is a one-item task
+    assert q["plan_by"] == "claude" and q["plan_at"] > 0
+    assert [i["key"] for i in q["items"]] == ["fb:3", "edit:memo.typ"]  # what the last roll sent, for the brief
+
+    q = queue.task(case, "t1", status="queued")
+    assert q["tasks"][0]["status"] == "queued"
+    q = queue.task(case, "t1", status="done", commit="abc1234", note="tightened")
+    assert (q["tasks"][0]["status"], q["tasks"][0]["commit"], q["tasks"][0]["note"]) == ("done", "abc1234", "tightened")
+    assert queue.task(case, "t9", status="done") is None
+    with pytest.raises(ValueError):
+        queue.task(case, "t2", status="later")
+
+    q = queue.rolled(case, "claude", {}, [], [])  # a new roll: its plan described the batch before it
+    assert q["tasks"] == [] and q["plan_at"] == 0 and q["plan_by"] == ""
+
+
+def test_queue_plan_ids_are_unique_and_capped(case):
+    q = queue.plan(case, [{"id": "t1", "title": str(i)} for i in range(queue.PLAN_MAX + 5)])
+    assert len(q["tasks"]) == queue.PLAN_MAX
+    assert [t["id"] for t in q["tasks"][:3]] == ["t1", "t1-2", "t1-3"]
+    assert queue.plan(case, [])["tasks"] == []
+
+
 def test_queue_forgets_a_previous_case_at_the_same_path(case):
     queue.rolled(case, "claude", {}, [1, 2], [])
     assert queue.read(case)["feedback"] == ["1", "2"]
@@ -804,11 +839,29 @@ def test_routes(write_server, case):
     assert s == 400 and "not a Typst file" in pv["error"]
     s, q = call(write_server, "POST", "/api/queue/rolled", {"target": "claude", "feedback": [1], "items": []})
     assert q["target"] == "claude"
+    s, q = call(write_server, "POST", "/api/queue/plan", {"by": "claude", "tasks": [
+        {"id": "t1", "title": "the cheap one", "items": ["fb:1"], "effort": "cheap", "agent": "OpenCode"},
+        {"id": "t2", "title": "the deep one", "items": ["edit:memo.typ"], "effort": "deep"},
+    ]})
+    assert s == 200 and [t["id"] for t in q["tasks"]] == ["t1", "t2"] and q["plan_by"] == "claude"
+    s, q = call(write_server, "POST", "/api/queue/task", {"id": "t1", "status": "sent"})
+    assert s == 200 and q["tasks"][0]["status"] == "sent"
+    s, bad = call(write_server, "POST", "/api/queue/task", {"id": "t9", "status": "done"})
+    assert s == 404
+    s, bad = call(write_server, "POST", "/api/queue/task", {"id": "t2", "status": "later"})
+    assert s == 400 and "status must be" in bad["error"]
+    s, bad = call(write_server, "POST", "/api/queue/plan", {"tasks": "t1"})
+    assert s == 400
+    s, q = call(write_server, "GET", "/api/queue")
+    assert [t["title"] for t in q["tasks"]] == ["the cheap one", "the deep one"]
     with urlopen(write_server + "/static/fonts/jetbrains-mono-latin-400-normal.woff2", timeout=5) as r:
         assert r.status == 200
     with urlopen(write_server + "/", timeout=5) as r:
         page = r.read().decode()
     assert '"case": {"id": "2026-014"' in page
+    # the Queue's plan, and the scheduler brief the roll carries
+    assert 'id="qplan"' in page and 'id="q-runall"' in page
+    assert "jura write queue plan" in page and "jura write queue start" in page
 
 
 def test_preview_runs(write_server, case):

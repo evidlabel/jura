@@ -68,6 +68,7 @@ from treeparse import argument, cli, command, group, option
 from workbench.paths import state_dir
 
 from . import __version__
+from . import queue
 from .term import Sessions, ws_accept
 
 DEFAULT_IGNORE = [
@@ -2189,6 +2190,89 @@ def fb_rm(
     _ws(root, notes, ignore, follow_outside, no_gitignore, show).delete_feedback(id)
 
 
+# ---------- the roll's plan: the scheduler agent's tasks, and their resources ----------
+QUEUE_MARKS = {"open": " ", "queued": ">", "sent": "*", "done": "x", "dropped": "-"}
+
+
+def _queue_root(root: str) -> Path:
+    r = Path(root).expanduser()
+    if not r.is_dir():
+        sys.exit(f"write: {r} is not a folder")
+    return r.resolve()
+
+
+def _print_queue(q: dict) -> None:
+    if not q["tasks"]:
+        print("no plan for the last roll")
+        return
+    who = q["plan_by"] or q["target"] or "the roll"
+    print(f"plan by {who}: {len(q['tasks'])} task(s)")
+    for t in q["tasks"]:
+        print(
+            f"{QUEUE_MARKS.get(t['status'], '?')} {t['id']:<6} {t['status']:<8} {t['effort']:<9} "
+            f"{t['agent'] or 'any':<18} {t['title']}"
+        )
+        for k in t["items"]:
+            print(f"      {k}")
+        if t["commit"]:
+            print(f"      commit {t['commit']}")
+        if t["note"]:
+            print(f"      note {t['note']}")
+
+
+def queue_ls(root: str) -> None:
+    """List the tasks the last roll was split into: id, status, effort, the harness row that
+    fits it, the items it covers, and its commit when done."""
+    _print_queue(queue.read(_queue_root(root)))
+
+
+def queue_plan(spec: str, by: str, root: str) -> None:
+    """Record the scheduler's split of the last roll. SPEC is JSON (a list of tasks, or
+    {"tasks": [...]}) or "-" to read it from stdin. Each task: id, title, items (queue keys,
+    e.g. "fb:3" or "edit:README.md"), effort (cheap|standard|deep), agent (a harness row)."""
+    text = sys.stdin.read() if spec in ("", "-") else spec
+    try:
+        data = json.loads(text)
+    except ValueError as e:
+        sys.exit(f"write: not JSON ({e})")
+    tasks = data.get("tasks") if isinstance(data, dict) else data
+    if isinstance(tasks, dict):
+        tasks = [tasks]
+    if not isinstance(tasks, list):
+        sys.exit("write: a list of tasks, or {\"tasks\": [...]}")
+    _print_queue(queue.plan(_queue_root(root), tasks, by=by))
+
+
+def _queue_task(tid: str, status: str, root: str, commit: str = "", note: str = "") -> None:
+    q = queue.task(_queue_root(root), tid, status=status, commit=commit or None, note=note or None)
+    if q is None:
+        sys.exit(f"write: no task {tid} in the last roll's plan")
+    _print_queue(q)
+
+
+def queue_start(ids: List[str], root: str) -> None:
+    """Ask the window to run these tasks: each goes to the harness row it names, which the
+    window starts if it is not open. The task then shows as sent until it is done or dropped."""
+    for tid in ids:
+        _queue_task(tid, "queued", root)
+
+
+def queue_done(id: str, commit: str, note: str, root: str) -> None:
+    """Mark a planned task done, with the commit that carries it."""
+    _queue_task(id, "done", root, commit=commit, note=note)
+
+
+def queue_drop(id: str, note: str, root: str) -> None:
+    """Drop a planned task: not worth doing, or folded into another one."""
+    _queue_task(id, "dropped", root, note=note)
+
+
+def queue_clear(root: str) -> None:
+    """Forget the last roll's plan."""
+    queue.plan(_queue_root(root), [])
+    print("plan cleared")
+
+
 def show_context(url: str) -> None:
     """Print what the user has selected in the Write window: paths, and the line span with its
     quoted text when lines are selected. Inside the agent pane the window's URL is in $WORKBENCH_WRITE_URL."""
@@ -2373,6 +2457,54 @@ app = cli(
                 command(name="done", help="Mark feedback done.", callback=fb_done, arguments=[FB_ID]),
                 command(name="reopen", help="Reopen feedback.", callback=fb_reopen, arguments=[FB_ID]),
                 command(name="rm", help="Delete feedback.", callback=fb_rm, arguments=[FB_ID]),
+            ],
+        ),
+        group(
+            name="queue",
+            help="The last roll's plan: split it into tasks, give each an effort and a harness row, "
+            "start them on the row they fit, and record how each ended.",
+            options=[NOTE_ROOT],
+            commands=[
+                command(name="ls", help="List the plan: id, status, effort, harness row, items.", callback=queue_ls),
+                command(
+                    name="plan",
+                    help="Record the scheduler's split (JSON tasks on stdin or as SPEC).",
+                    callback=queue_plan,
+                    arguments=[
+                        argument(
+                            name="spec",
+                            arg_type=str,
+                            nargs="?",
+                            default="-",
+                            help='JSON: a list of tasks or {"tasks": [...]}; "-" reads stdin.',
+                        )
+                    ],
+                    options=[option(flags=["--by"], arg_type=str, default="", help="who made the plan (a harness row)")],
+                ),
+                command(
+                    name="start",
+                    help="Hand these tasks to the window, which runs each on its harness row.",
+                    callback=queue_start,
+                    arguments=[argument(name="ids", arg_type=str, nargs="+", help="task ids")],
+                ),
+                command(
+                    name="done",
+                    help="Mark a task done.",
+                    callback=queue_done,
+                    arguments=[argument(name="id", arg_type=str, help="task id")],
+                    options=[
+                        option(flags=["--commit"], arg_type=str, default="", help="the commit that carries it"),
+                        option(flags=["--note"], arg_type=str, default="", help="what was done"),
+                    ],
+                ),
+                command(
+                    name="drop",
+                    help="Drop a task (not worth doing, or folded into another).",
+                    callback=queue_drop,
+                    arguments=[argument(name="id", arg_type=str, help="task id")],
+                    options=[option(flags=["--note"], arg_type=str, default="", help="why")],
+                ),
+                command(name="clear", help="Forget the last roll's plan.", callback=queue_clear),
             ],
         ),
     ],

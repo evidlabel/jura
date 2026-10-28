@@ -26,8 +26,8 @@ def test_available_keeps_installed_and_the_shell(monkeypatch, tmp_path):
     monkeypatch.setenv("WORKBENCH_AGENTS", str(cat))
     monkeypatch.setattr(shutil, "which", lambda name: "/bin/claude" if name == "claude" else None)
     assert agents.available() == [
-        {"name": "Claude", "command": "claude", "title": ""},
-        {"name": "shell", "command": "", "title": ""},
+        {"name": "Claude", "command": "claude", "title": "", "effort": "standard"},
+        {"name": "shell", "command": "", "title": "", "effort": "standard"},
     ]
 
 
@@ -35,7 +35,7 @@ def test_bad_toml_is_the_shell_only(monkeypatch, tmp_path):
     cat = tmp_path / "agents.toml"
     cat.write_text("[[agent]\n", encoding="utf-8")
     monkeypatch.setenv("WORKBENCH_AGENTS", str(cat))
-    assert agents.available() == [{"name": "shell", "command": "", "title": ""}]
+    assert agents.available() == [{"name": "shell", "command": "", "title": "", "effort": "standard"}]
 
 
 def test_user_file_replaces_the_shipped_list(monkeypatch, tmp_path):
@@ -112,10 +112,10 @@ def test_case_names_stay_greyed_when_missing(monkeypatch, tmp_path):
     monkeypatch.setattr(shutil, "which", lambda name: f"/bin/{name}" if name == "claude" else None)
     rows = agents.available([{"name": n, "command": n} for n in ("claude", "grok", "codex")])
     assert rows == [
-        {"name": "Claude", "command": "claude", "title": ""},  # the catalogue's name, not doubled below
-        {"name": "Grok", "command": "grok", "title": "Grok Build", "missing": True, "bin": "grok"},
-        {"name": "codex", "command": "codex", "title": "", "missing": True, "bin": "codex"},  # not in the catalogue
-        {"name": "shell", "command": "", "title": ""},
+        {"name": "Claude", "command": "claude", "title": "", "effort": "standard"},  # the catalogue's name, not doubled below
+        {"name": "Grok", "command": "grok", "title": "Grok Build", "effort": "standard", "missing": True, "bin": "grok"},
+        {"name": "codex", "command": "codex", "title": "", "effort": "standard", "missing": True, "bin": "codex"},  # not in the catalogue
+        {"name": "shell", "command": "", "title": "", "effort": "standard"},
     ]  # Hermes: a catalogue row that is not installed is left out
 
 
@@ -135,3 +135,29 @@ def test_a_name_only_case_row_is_the_catalogue_row(monkeypatch, tmp_path):
         ("OpenCode · local", "OPENCODE_CONFIG=/p.json opencode"),
         ("shell", ""),
     ]
+
+
+def test_effort_is_the_rolls_ladder(monkeypatch, tmp_path):
+    """A row's `effort` says what the scheduler may send it; anything else is standard."""
+    cat = tmp_path / "agents.toml"
+    cat.write_text(
+        '[[agent]]\nname = "Local"\ncommand = "local"\neffort = "cheap"\n'
+        '[[agent]]\nname = "Claude"\ncommand = "claude"\neffort = "DEEP"\n'
+        '[[agent]]\nname = "Other"\ncommand = "other"\neffort = "expensive"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("WORKBENCH_AGENTS", str(cat))
+    monkeypatch.setattr(shutil, "which", lambda name: f"/bin/{name}")
+    rows = {r["name"]: r["effort"] for r in agents.available()}
+    assert rows == {"Local": "cheap", "Claude": "deep", "Other": "standard", "shell": "standard"}
+    assert [r["effort"] for r in agents.parse(agents.shipped_text())] == ["standard"] * 6
+
+
+def test_a_case_row_can_only_choose_the_effort(monkeypatch, tmp_path):
+    """`- name: claude` plus `effort: deep` is the catalogue's Claude on the deep rung."""
+    cat = tmp_path / "agents.toml"
+    cat.write_text('[[agent]]\nname = "Claude"\ncommand = "claude"\n', encoding="utf-8")
+    monkeypatch.setenv("WORKBENCH_AGENTS", str(cat))
+    monkeypatch.setattr(shutil, "which", lambda name: f"/bin/{name}")
+    rows = agents.available([{"name": "claude", "effort": "deep"}])
+    assert rows[0] == {"name": "Claude", "command": "claude", "title": "", "effort": "deep"}

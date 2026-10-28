@@ -20,8 +20,10 @@ Routes (all under the handler's guards: loopback Host, X-Treedit on writes):
     POST /api/git/tag             {label, message} — tag HEAD
     POST /api/git/commit          commit what is pending now
     POST /api/compile             {path} — typst compile a .typ to out/<path>.pdf
-    GET  /api/queue               what the last roll sent
+    GET  /api/queue               what the last roll sent, and its plan
     POST /api/queue/rolled        {target, notes, feedback, items}
+    POST /api/queue/plan          {tasks, by} — the scheduler agent's split of the last roll
+    POST /api/queue/task          {id, status, commit, note} — one task's outcome
     GET  /static/fonts/<file>     the workbench fonts
 """
 
@@ -331,5 +333,26 @@ class Extras:
                 queue.rolled(root, str(b.get("target", "")), b.get("notes") or {}, b.get("feedback") or [],
                              b.get("items") or [], b.get("held") or []),
             )
+            return True
+        if method == "POST" and path == "/api/queue/plan":
+            b = h.body()
+            tasks = b.get("tasks")
+            if not isinstance(tasks, list):
+                h.send_json(400, {"error": "tasks: a list of {id, title, items, effort, agent}"})
+                return True
+            h.send_json(200, queue.plan(root, tasks, by=str(b.get("by") or "")))
+            return True
+        if method == "POST" and path == "/api/queue/task":
+            b = h.body()
+            try:
+                r = queue.task(root, str(b.get("id") or ""), status=b.get("status"),
+                               commit=b.get("commit"), note=b.get("note"))
+            except ValueError as e:
+                h.send_json(400, {"error": str(e)})
+                return True
+            if r is None:
+                h.send_json(404, {"error": "no such task"})
+            else:
+                h.send_json(200, r)
             return True
         return False

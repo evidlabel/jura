@@ -1,6 +1,6 @@
 ---
 name: workbench
-description: Use when working as an agent inside a jura workbench case (a ~/cases/<id> workdir with workbench.yml, or $WORKBENCH_CASE set) - reading the case's linked evid sets, writing Typst with labquote keys from refs/*.yml, answering the user's notes and feedback, and committing work so auto-git attributes it.
+description: Use when working as an agent inside a jura workbench case (a ~/cases/<id> workdir with workbench.yml, or $WORKBENCH_CASE set) - reading the case's linked evid sets, writing Typst with labquote keys from refs/*.yml, answering the user's notes and feedback, splitting a multi-item roll into tasks on the right harness rows, and committing work so auto-git attributes it.
 ---
 
 # workbench
@@ -24,6 +24,6 @@ Discover: `workbench -h`, `evid -h`.
 ## Answer the user
 
 - `jura write fb ls` lists open feedback (files, folders, line spans). `jura write edits` shows the user's saved and unsaved edits, and `jura write context` shows their current selection.
-- A **roll** from the Queue lists exactly what to act on: do those items, in order.
+- A **roll** from the Queue lists exactly what to act on. One item, or everything in one file: do it yourself, in order. Several independent items: split them into tasks (items on the same file, or that depend on each other, stay together), give each an effort (`cheap` for mechanical work, `deep` for reading and arguing) and the harness row that effort fits, then record the split with `jura write queue plan -` (JSON on stdin). `jura write queue start t1` hands a task to the window, which opens that row and types the task into it; close it with `jura write queue done t1 --commit <hash>` or `jura write queue drop t1 --note "…"`. `jura write queue ls` shows the plan.
 - The user's saves are already committed (`user: …`). Commit your own work per item as `agent: <what changed>`, then reply with `jura write fb reply ID "what changed (hash)" --done`.
 - Anything you leave uncommitted is committed for you as `agent: …` once the tree is quiet.
