@@ -31,7 +31,7 @@ to `manosfaeren` (æ→ae, ø→oe, å→aa); the display name keeps the æ.
 1. `jura case new 2026-014 "Tenancy dispute"` creates `~/cases/2026-014/`, the git-tracked workdir (`workbench.yml`, `AGENTS.md`, `main.typ`, and empty `docs/`, `refs/extra/` and `out/`). Its agents are Claude, Codex, Grok and OpenCode. One that is not installed is greyed out in the Agent menu. It does not create a did folder and it does not create a global evid set.
 2. In **Anonymization**, create a did set and add the case files. The set lives under `~/did_workdirs/<set>/`, outside the case. That same set shows up in Write.
 3. In **Write**, the Sources pane is two pools of pills. Evid pills (one color) link a global set or a local set under `evid/plain/`. Did pills (the other color) are the sets from Anonymization: connect one, and choose how the PDF is labelled (`placeholder` by default, or `faker`, `anon`, `pseudo`). Connecting a set writes those PDFs into this case's evid directory, `evid/anon/anon_set_<set>/`. **Hand off** writes them again. A connected did pill is marked stale when a document is added or the extracted keys change. **Gather** (or `jura gather`, for agents) writes one merged `refs/refs.yml` for the linked sets. It is the case's only citation file: any `.typ` file, in any folder, loads it as `yaml("/refs/refs.yml")`, and labquote prints only the entries it cites. Any other `refs.yml` in the case is not read, and Gather lists it as stray. Citations from outside evid (a lawcite statute, …) go in `refs/extra/*.yml`, which Gather merges in.
-4. Annotate files, folders and lines. In the **Queue**, choose which of your new edits and notes go to which agent, then **Roll**. A roll of several independent items comes back as a plan: tasks, each with the effort it needs, run on the harness row that fits.
+4. Annotate files, folders and lines. In the **Queue**, choose which of your new edits and notes go to which agent, then **Roll**. A roll of several independent items is broken down by the top-level agent and handed to its subagents, each on the model and thinking budget the task needs; the Queue shows the tasks.
 5. **Tag state…** marks the current version (`state/<date>-<name>`).
 
 ## Why a queue
@@ -49,16 +49,16 @@ its questions land where the answer already is. Fewer, fuller turns: a focused h
 side, an agent with the whole picture on the other.
 
 A roll arrives as items, not as a paragraph, which changes what the receiving agent can do with
-it. It reads the queue once, splits it into tasks along the files and the questions the items
-carry, and gives each task an effort: `cheap` for mechanical work (a rename, a typo, a moved
-line), `deep` for the item that has to read a document or argue a point. A harness row in the
-Agent menu may say which effort it is for — a local model as `cheap`, a frontier one as `deep`
-— and the roll's agent names the row each task fits. It records the split with
-`jura write queue plan`, and the Queue shows it beneath the items: task, effort, row.
-`jura write queue start t1` hands one task to the window, which opens that row's terminal and
-types the task into it; a task the agent keeps for itself it simply does. `done` and `drop`
-close the plan. A batch that used to be one prompt on one model becomes several turns, each on
-the resource its difficulty asks for.
+it. The roll is sent to the top-level agent of a harness, and the queue is its brief: it reads
+the list once, breaks it into tasks along the files and the questions the items carry, and fans
+them out to subagents of its own harness, several at a time. The difficulty decides the
+resource: a rename, a typo or a moved line goes to a fast, cheap model, while the item that has
+to read a document or argue a point gets the strongest model and the longest thinking budget,
+and a task that needs the whole conversation stays with the top agent. The split is recorded
+with `jura write queue plan` and shows in the Queue beneath the items: task, effort, the
+subagent that took it. `done` and `drop` close it. A batch that used to be one prompt on one
+model becomes several turns inside the harness, each on the resource its difficulty asks for —
+the top-level agent as the scheduler, not a second one beside it.
 
 ## Where things go
 
@@ -134,7 +134,7 @@ Needs `evid` and `did` on PATH (`$WORKBENCH_EVID_BIN` / `$WORKBENCH_DID_BIN` ove
 | `WORKBENCH_DID` | `~/did_workdirs` | did sets, one directory each. Not inside a case. |
 | `WORKBENCH_EVID_DB` | evid's own | a separate evid data dir (a deliverable, a test) |
 | `WORKBENCH_AGENT` | (unset) | command typed into the first Write terminal, e.g. `claude`. Unset, the pane stays closed and no shell starts. |
-| `WORKBENCH_AGENTS` | shipped `agents.toml` | harness buttons. A button shows when its program is on PATH. `~/.config/workbench/agents.toml` replaces the shipped list when that file exists. A row may set `env` for one config (e.g. an opencode profile) and `effort` (`cheap`, `standard` or `deep`: the rung a roll's tasks are sent to it on), and one harness may be listed several times. A case can list its own rows under `agents:` in `workbench.yml`; they come first and replace the catalogue by name. |
+| `WORKBENCH_AGENTS` | shipped `agents.toml` | harness buttons. A button shows when its program is on PATH. `~/.config/workbench/agents.toml` replaces the shipped list when that file exists. A row may set `env` for one config (e.g. an opencode profile), and one harness may be listed several times. A case can list its own rows under `agents:` in `workbench.yml`; they come first and replace the catalogue by name. |
 | `WORKBENCH_SKILLS` | case `skills.dirs`, else shipped `skills.toml` | one directory that replaces the skill directories. A case lists its own directories under `skills.dirs` in `workbench.yml`. With no `dirs` key, `~/.config/workbench/skills.toml` replaces the shipped list (claude, grok, hermes, codex) when that file exists. |
 | `WORKBENCH_SANDBOX` | `1` | `0` turns the sandbox off (each terminal shows it) |
 

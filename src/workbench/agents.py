@@ -10,11 +10,6 @@ global one) as separate rows. An optional ``env`` table is set on that command o
 without touching the shell around it — ``OPENCODE_CONFIG`` picks an opencode profile,
 ``<VAR>`` values are ``~``-expanded and quoted for the login shell. ``command`` itself
 is typed verbatim, so extra flags fit there too.
-
-A row's optional ``effort`` (``cheap``, ``standard`` or ``deep``; default ``standard``)
-says which work it is for. A roll's scheduler agent splits the queue into tasks and names
-the row each task's effort fits, and the window starts that row for the task; a row left
-out of the catalogue is simply not on the ladder.
 """
 
 from __future__ import annotations
@@ -27,15 +22,8 @@ from pathlib import Path
 
 from workbench import paths
 
-EFFORTS = ("cheap", "standard", "deep")
-_SHELL = {"name": "shell", "command": "", "bin": "", "title": "", "effort": "standard"}
+_SHELL = {"name": "shell", "command": "", "bin": "", "title": ""}
 _SAFE_WORD = re.compile(r"[A-Za-z0-9_./:@%+=-]+")
-
-
-def effort(row: dict) -> str:
-    """A row's rung on the ladder. Anything unrecognised is ``standard``, never a lost row."""
-    value = str(row.get("effort") or "").strip().lower()
-    return value if value in EFFORTS else "standard"
 
 
 def config_path() -> Path | None:
@@ -78,7 +66,6 @@ def parse(text: str) -> list[dict]:
                 "bin": str(row.get("bin") or "").strip(),
                 "title": str(row.get("title") or "").strip(),
                 "env": env,
-                "effort": effort(row),
             }
         )
         if command == "":
@@ -118,8 +105,7 @@ def _line(row: dict) -> str:
 def available(extra: list[dict] | None = None) -> list[dict]:
     """The harness buttons. ``extra`` (a case's own rows) comes first, and a name it repeats
     replaces the catalogue's (names match without case). A bare case row (``- claude``, or a
-    row with only ``name:``, optionally with ``effort:``) takes the catalogue row of that name,
-    keeping the effort the case gave it. A case row whose ``bin`` is not on PATH stays, marked
+    row with only ``name:``) takes the catalogue row of that name. A case row whose ``bin`` is not on PATH stays, marked
     ``missing`` (the page greys it out); a catalogue row that is not installed is left out.
     The shell is always included."""
     cat = catalogue()
@@ -128,19 +114,10 @@ def available(extra: list[dict] | None = None) -> list[dict]:
     for row, own in [*((r, True) for r in extra or []), *((r, False) for r in cat)]:
         name = str(row.get("name") or "").strip()
         command = str(row.get("command") or "").strip()
-        # `- claude`, or a row with only a name (and maybe an effort): the catalogue row of that name
-        bare = (
-            own
-            and command in ("", name)
-            and not row.get("bin")
-            and not row.get("title")
-            and not row.get("env")
-        )
+        # `- claude`, or a row with only a name: the catalogue row of that name
+        bare = own and command in ("", name) and not row.get("bin") and not row.get("title")
         if bare and name.lower() in by_name:
-            want = effort(row) if row.get("effort") else ""
             row = by_name[name.lower()]
-            if want:
-                row = {**row, "effort": want}
             name, command = str(row.get("name") or name).strip(), str(row.get("command") or "").strip()
         if not name or name.lower() in seen:
             continue
@@ -151,15 +128,10 @@ def available(extra: list[dict] | None = None) -> list[dict]:
             missing = shutil.which(probe) is None
             if missing and not own:
                 continue
-        entry = {
-            "name": name,
-            "command": _line({**row, "command": command}),
-            "title": str(row.get("title") or "").strip(),
-            "effort": effort(row),
-        }
+        entry = {"name": name, "command": _line({**row, "command": command}), "title": str(row.get("title") or "").strip()}
         if missing:
             entry.update(missing=True, bin=probe)  # the program it looked for
         out.append(entry)
     if not any(r["command"] == "" for r in out):
-        out.append(dict(_SHELL))
+        out.append({"name": "shell", "command": "", "title": ""})
     return out

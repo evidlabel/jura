@@ -22,7 +22,7 @@ Routes (all under the handler's guards: loopback Host, X-Treedit on writes):
     POST /api/compile             {path} — typst compile a .typ to out/<path>.pdf
     GET  /api/queue               what the last roll sent, and its plan
     POST /api/queue/rolled        {target, notes, feedback, items}
-    POST /api/queue/plan          {tasks, by} — the scheduler agent's split of the last roll
+    POST /api/queue/plan          {tasks, by} — the top-level agent's split of the last roll
     POST /api/queue/task          {id, status, commit, note} — one task's outcome
     GET  /static/fonts/<file>     the workbench fonts
 """

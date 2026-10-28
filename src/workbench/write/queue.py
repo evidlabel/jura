@@ -6,11 +6,11 @@ when, to which agent, the annotations as they were, and the feedback ids — so 
 holds only what is new. Kept per workdir in the workbench state dir, outside the case, with the
 case's identity (its first commit): a new case at the same path starts with an empty record.
 
-It also keeps the roll's **plan**: the tasks the receiving agent split the roll into, each with
-the effort it needs and the harness row that effort fits. The agent records the split
-(``jura write queue plan``) and asks for a resource per task (``jura write queue start``); the
-window opens that harness and types the task into it, and the task ends with ``done`` or
-``drop``. A new roll clears the plan: it described the batch before it.
+It also keeps the roll's **plan**: the tasks the top-level agent split the roll into, each with
+the effort it needs and the subagent that took it. The agent records the split (``jura write
+queue plan``) and closes each task with ``done`` or ``drop``; the Queue shows it beneath the
+items, so the human can see what the harness is doing in parallel. A new roll clears the plan:
+it described the batch before it.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from pathlib import Path
 from workbench import paths
 
 EFFORTS = ("cheap", "standard", "deep")
-STATUSES = ("open", "queued", "sent", "done", "dropped")
+STATUSES = ("open", "running", "done", "dropped")
 PLAN_MAX = 50  # tasks one roll may be split into
 ITEM_MAX = 200
 
@@ -158,7 +158,7 @@ def rolled(root: Path, target: str, notes: dict, feedback: list, items: list, he
 
 
 def plan(root: Path, tasks: list, by: str = "") -> dict:
-    """Record the scheduler agent's split of the last roll: one task per independent piece."""
+    """Record the top-level agent's split of the last roll: one task per independent piece."""
     data = _raw(root)
     data.update(case=case_id(root), tasks=_tasks(tasks), plan_at=time.time(), plan_by=_text(by, 80))
     return _write(root, data)

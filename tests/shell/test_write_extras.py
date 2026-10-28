@@ -562,8 +562,8 @@ def test_queue_plan_and_tasks(case):
     assert q["plan_by"] == "claude" and q["plan_at"] > 0
     assert [i["key"] for i in q["items"]] == ["fb:3", "edit:memo.typ"]  # what the last roll sent, for the brief
 
-    q = queue.task(case, "t1", status="queued")
-    assert q["tasks"][0]["status"] == "queued"
+    q = queue.task(case, "t1", status="running")
+    assert q["tasks"][0]["status"] == "running"
     q = queue.task(case, "t1", status="done", commit="abc1234", note="tightened")
     assert (q["tasks"][0]["status"], q["tasks"][0]["commit"], q["tasks"][0]["note"]) == ("done", "abc1234", "tightened")
     assert queue.task(case, "t9", status="done") is None
@@ -844,8 +844,8 @@ def test_routes(write_server, case):
         {"id": "t2", "title": "the deep one", "items": ["edit:memo.typ"], "effort": "deep"},
     ]})
     assert s == 200 and [t["id"] for t in q["tasks"]] == ["t1", "t2"] and q["plan_by"] == "claude"
-    s, q = call(write_server, "POST", "/api/queue/task", {"id": "t1", "status": "sent"})
-    assert s == 200 and q["tasks"][0]["status"] == "sent"
+    s, q = call(write_server, "POST", "/api/queue/task", {"id": "t1", "status": "running"})
+    assert s == 200 and q["tasks"][0]["status"] == "running"
     s, bad = call(write_server, "POST", "/api/queue/task", {"id": "t9", "status": "done"})
     assert s == 404
     s, bad = call(write_server, "POST", "/api/queue/task", {"id": "t2", "status": "later"})
@@ -859,9 +859,9 @@ def test_routes(write_server, case):
     with urlopen(write_server + "/", timeout=5) as r:
         page = r.read().decode()
     assert '"case": {"id": "2026-014"' in page
-    # the Queue's plan, and the scheduler brief the roll carries
-    assert 'id="qplan"' in page and 'id="q-runall"' in page
-    assert "jura write queue plan" in page and "jura write queue start" in page
+    # the Queue's plan, and the subagent brief the roll carries
+    assert 'id="qplan"' in page and "jura write queue plan" in page and "jura write queue done" in page
+    assert "subagent" in page
 
 
 def test_preview_runs(write_server, case):

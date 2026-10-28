@@ -14,11 +14,6 @@
 #   bin = "opencode"
 #   title = "OpenCode on a local model"
 #   env = { OPENCODE_CONFIG = "~/.config/opencode/profiles/local.json" }
-#   effort = "cheap"                   # a roll's simple tasks start here; "standard" is the default
-#
-# `effort` is one of `cheap`, `standard` and `deep`. A roll's scheduler agent splits the queue
-# into tasks and names the row each task's effort fits, so listing a fast local model as
-# `cheap` and a frontier one as `deep` is what puts the two ends of that ladder in reach.
 
 [[agent]]
 name = "OpenCode"

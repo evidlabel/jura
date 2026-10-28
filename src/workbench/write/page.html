@@ -497,10 +497,8 @@ html.embed .ptoggles:has(#pt-preview[hidden]){display:none}  /* Preview is its o
 .qtask .qb{flex:1;min-width:0}
 .qtask .qp{font-size:12.5px;color:var(--text);word-break:break-word}
 .qtask .qt{font-family:var(--mono);font-size:11.5px;color:var(--dim)}
-.qtask.sent .qp,.qtask.queued .qp{color:var(--dim)}
 .qtask.done,.qtask.dropped{opacity:.5}
 .qtask.done .qp{text-decoration:line-through}
-.qtask .qgo{flex:none;padding:0 6px;font-size:12px}
 .thead .sbx{font-size:10.5px;color:var(--ok);border:1px solid var(--ok);border-radius:999px;padding:0 6px}
 .thead .sbx.off{color:var(--danger);border-color:var(--danger)}
 .thead .stale{font-size:10.5px;color:var(--note);border:1px solid var(--note);border-radius:999px;padding:0 6px;cursor:pointer}
@@ -622,7 +620,7 @@ html.embed .ptoggles:has(#pt-preview[hidden]){display:none}  /* Preview is its o
     <div id="queuepane" hidden aria-label="Queue">
       <div class="phead"><span>Queue</span><span class="kind" id="qsince"></span><span class="spacer"></span><button id="q-all" title="Switch every item on or off">All</button></div>
       <div id="qlist"></div>
-      <div class="phead" id="qplanhead" hidden><span>Plan</span><span class="kind" id="qplaninfo"></span><span class="spacer"></span><button id="q-runall" title="Run every task still open, each on the harness row it names">Run open</button></div>
+      <div class="phead" id="qplanhead" hidden><span>Plan</span><span class="kind" id="qplaninfo"></span><span class="spacer"></span><span class="kind">the harness's tasks</span></div>
       <div id="qplan" hidden aria-label="The roll's tasks"></div>
       <div class="qfoot"><label for="qtarget">Roll to</label><select id="qtarget"></select><button id="q-roll" class="primary">Roll</button></div>
     </div>
@@ -2734,8 +2732,7 @@ async function termAdd(cmd, name = '') {  // name: the agent menu's row, the pan
     else termSync(r.terms);
     const P = T.list.find(x => x.id === r.id);
     if (P) { termActive(P); requestAnimationFrame(() => P.term.focus()); }
-    return P || null;
-  } catch (e) { toast(e.message, true); return null; }
+  } catch (e) { toast(e.message, true); }
 }
 async function termClose(P) {
   try { termSync((await api('POST', '/api/term/close', { id: P.id })).terms); } catch (e) { toast(e.message, true); }
@@ -2750,7 +2747,9 @@ async function openTerm(open) {
   T.list.forEach(termConnect);
   requestAnimationFrame(() => { T.list.forEach(termFit); T.active?.term.focus(); });
 }
-function sendTo(P, text, enter) {  // type into one session (Enter separately, so TUIs don't take it as pasted)
+async function sendToAgent(text, enter) {  // type into the active session (Enter separately, so TUIs don't take it as pasted)
+  if (!T.open) await openTerm(true);
+  const P = T.active;
   if (!P) return toast('No terminal: pick a harness', true);
   const go = () => {
     termSend(P, { t: 'in', d: text });
@@ -2758,10 +2757,6 @@ function sendTo(P, text, enter) {  // type into one session (Enter separately, s
     P.term.focus();
   };
   if (!termSend(P, { t: 'resize', rows: P.term.rows, cols: P.term.cols })) P.queue.push(go); else go();
-}
-async function sendToAgent(text, enter) {  // the active session
-  if (!T.open) await openTerm(true);
-  sendTo(T.active, text, enter);
 }
 function currentContext() {
   if (S.multi.size > 1) {
@@ -2795,7 +2790,7 @@ if (CFG.term) {
   if (window.parent === window) { $('#agents').hidden = false; mountAgentSelect($('#agents')); }
   else postAgents();
   const ROLL = 'Do a workbench agent roll: pick up my edits (`jura write edits`), commit them as mine, do the housekeeping, then work through the open feedback. ' +
-    'If it comes to more than one independent task, split it and give each task the harness row its effort fits (`jura write queue plan -`; the Queue pane shows the plan).';
+    'If it comes to several independent tasks, split them and hand them to subagents of your harness, each on the model and thinking budget its effort asks for (`jura write queue plan -`; the Queue shows the plan).';
   $('#t-roll').onclick = () => sendToAgent(ROLL, true);
   $('#t-loop').onclick = () => {  // Claude Code repeats it with /loop; other agents get the schedule in words
     const quiet = ' If nothing changed since the last roll and no feedback is open, say so in one line and do nothing else.';
@@ -3208,7 +3203,7 @@ var W = {
   scopeGen: 0,
   panes: { preview: load('pane.preview', true), skills: load('pane.skills', false), queue: load('pane.queue', false) },
   pv: { path: null, data: null, control: null, ws: null, hold: {}, sendT: 0, scrollT: 0 },
-  queue: null, qOff: new Set(load('queue.off', [])), qstamp: '', running: new Set(), skOpen: new Set(), skTree: new Set(), git: null,
+  queue: null, qOff: new Set(load('queue.off', [])), qstamp: '', skOpen: new Set(), skTree: new Set(), git: null,
   srcAdd: { evid: load('src.add.evid', false), did: load('src.add.did', false) }, srcLast: null, srcMut: 0, srcBusy: 0,
 };
 /* the agents' terminals: sandboxed or not, and whether they still run with an older scope */
@@ -3772,23 +3767,20 @@ function itemLine(it) {
   if (it.kind === 'note') return `- my annotation on ${where}: ${JSON.stringify(it.text)}`;
   return `- feedback #${it.id} on ${where}: ${JSON.stringify(it.text)} (answer with \`jura write fb reply ${it.id} "…" --done\`)`;
 }
-function effortLadder() {  // the harness rows a task's effort can be sent to
-  const rows = agentList().filter(a => !a.missing && a.command);
-  return ['cheap', 'standard', 'deep']
-    .map(e => `${e}: ${rows.filter(a => (a.effort || 'standard') === e).map(a => a.name).join(', ') || 'none'}`)
-    .join(' · ');
-}
 function rollText(items) {
   return 'Workbench roll — my new work since the last roll:\n' + items.map(itemLine).join('\n') +
-    '\n\nWhen it is more than one independent task, schedule it before you work: split these items into tasks ' +
-    '(items on the same file, or that depend on each other, stay together), give each an effort — cheap for ' +
-    'mechanical work (a rename, a typo, a moved line), deep for anything that has to read a document or argue a ' +
-    'point — and name the harness row that effort fits. Rows: ' + effortLadder() + '.\n' +
-    'Record the split with `jura write queue plan -`, JSON on stdin:\n' +
-    '{"tasks":[{"id":"t1","title":"…","items":["fb:3"],"effort":"cheap","agent":"OpenCode"}]}\n' +
-    'Then `jura write queue start t1` hands that task to the window, which opens the row and types the task into ' +
-    'it; end it with `jura write queue done t1 --commit <hash>` or `jura write queue drop t1 --note "…"`. Do a task ' +
-    'yourself when it is the whole queue, or when you are the row it fits.\n' +
+    '\n\nYou are the top-level agent for this roll. One item, or everything in one file: just do it. Several ' +
+    'independent items: break the queue down first, then delegate. Items on the same file, or that depend on each ' +
+    'other, are one task. Hand each task to a subagent of your own harness (Claude Code: the Task tool and its ' +
+    '`model`; OpenCode: a subagent; whatever your harness calls it) and keep for yourself the task that needs the ' +
+    'whole conversation. Spend the budget where the difficulty is: mechanical work — a rename, a typo, a moved ' +
+    'line — goes to a fast, cheap model, while the task that has to read a document or argue a point gets the ' +
+    'strongest model and the longest thinking budget. Run independent tasks in parallel, but never let two ' +
+    'subagents edit the same file at once.\n' +
+    'Record the split so I can see it in the Queue: `jura write queue plan -`, JSON on stdin:\n' +
+    '{"tasks":[{"id":"t1","title":"…","items":["fb:3"],"effort":"cheap","agent":"subagent · fast model"}]}\n' +
+    'effort is `cheap`, `standard` or `deep`. Close each task as it lands with `jura write queue done t1 ' +
+    '--commit <hash>` or `jura write queue drop t1 --note "…"`.\n' +
     'Commit your own changes per item (agent: …), and reply to each feedback item with the commit hash.';
 }
 $('#q-roll').onclick = async () => {
@@ -3814,70 +3806,26 @@ $('#q-all').onclick = () => {
   store('queue.off', [...W.qOff]); renderQueue();
 };
 
-/* the roll's plan: the tasks the receiving agent split it into, each on the harness row its effort fits */
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-function rowFor(t) {  // the row a task names, else the first row on its effort, else any row
-  const rows = agentList().filter(a => !a.missing && a.command);
-  return rows.find(a => a.name === t.agent) || rows.find(a => (a.effort || 'standard') === t.effort) || rows[0] || null;
-}
-function taskText(t) {
-  const known = new Map((W.queue?.items || []).map(i => [i.key, i]));
-  const lines = (t.items || []).map(k => (known.has(k) ? itemLine(known.get(k)) : `- ${k}`));
-  return `Workbench task ${t.id} (${t.effort}) — ${t.title}\n${lines.join('\n')}\n` +
-    'Do this task only. Commit your changes (agent: …), answer each feedback item with ' +
-    `\`jura write fb reply ID "…" --done\`, and finish with \`jura write queue done ${t.id} --commit <short hash>\` ` +
-    `(or \`jura write queue drop ${t.id} --note "…"\`).`;
-}
+/* the roll's plan: the tasks the top-level agent split it into, and the subagent that took each */
 function renderPlan() {
   const q = W.queue || {}, tasks = q.tasks || [];
   const head = $('#qplanhead'), box = $('#qplan');
   head.hidden = box.hidden = !tasks.length;
   if (!tasks.length) return;
-  const open = tasks.filter(t => t.status === 'open' || t.status === 'queued');
-  $('#qplaninfo').textContent = `${q.plan_by || q.target || 'the roll'} · ${open.length} of ${tasks.length} to go`;
-  $('#q-runall').hidden = !open.length;
+  const live = tasks.filter(t => t.status === 'open' || t.status === 'running');
+  $('#qplaninfo').textContent = `${q.plan_by || q.target || 'the roll'} · ${live.length} of ${tasks.length} to go`;
   box.textContent = '';
   for (const t of tasks) {
     const row = el('div', 'qtask ' + t.status);
-    const go = el('button', 'qgo', t.status === 'queued' ? '…' : '▸');
-    go.title = t.status === 'done' || t.status === 'dropped'
-      ? `Task ${t.id} is ${t.status}` : `Run ${t.id} on ${t.agent || 'the row its effort fits'}`;
-    go.disabled = t.status === 'done' || t.status === 'dropped' || t.status === 'queued';
-    go.onclick = () => runTask(t);
     const b = el('div', 'qb');
     b.append(el('div', 'qp', `${t.id} · ${t.title}`));
-    b.append(el('div', 'qt', [t.agent || 'any row', t.status, t.commit].filter(Boolean).join(' · ')));
-    row.append(go, el('span', 'qs ' + t.effort, t.effort), b);
+    b.append(el('div', 'qt', [t.agent || 'kept by the top agent', t.status, t.commit].filter(Boolean).join(' · ')));
+    row.append(el('span', 'qs ' + t.effort, t.effort), b);
+    if (t.items && t.items.length) row.title = t.items.join('\n');
     box.append(row);
   }
 }
-async function setTask(id, status, extra = {}) {
-  try {
-    W.queue = await api('POST', '/api/queue/task', { id, status, ...extra });
-    renderPlan(); renderQueue();
-  } catch (e) { toast(e.message, true); }
-}
-async function runTask(t) {  // one task, on the row it names: reuse that row's terminal or start it
-  const a = rowFor(t);
-  if (!a) return toast('No harness row for this task', true);
-  if (W.running.has(t.id)) return;
-  W.running.add(t.id);
-  try {
-    if (!T.open) await openTerm(true);
-    let P = T.list.find(x => x.lab.textContent === a.name);
-    const fresh = !P;
-    if (fresh) { await termAdd(a.command, a.name); P = T.list.find(x => x.lab.textContent === a.name); }
-    if (!P) return toast(`Could not start ${a.name}`, true);
-    if (fresh) await sleep(1500);  // let the harness come up before the task lands in it
-    termActive(P);
-    sendTo(P, '\x1b[200~' + taskText(t) + '\x1b[201~', true);
-    if (t.status !== 'sent') await setTask(t.id, 'sent');
-  } finally { W.running.delete(t.id); }
-}
-$('#q-runall').onclick = async () => {
-  for (const t of (W.queue?.tasks || []).filter(t => t.status === 'open')) await runTask(t);
-};
-async function pollPlan() {  // the agent plans and starts tasks from its terminal: show it, and run what it queued
+async function pollPlan() {  // the agent records the split and closes tasks from its terminal: show it live
   if (document.hidden) return;
   let q;
   try { q = await api('GET', '/api/queue'); } catch { return; }
@@ -3885,7 +3833,6 @@ async function pollPlan() {  // the agent plans and starts tasks from its termin
   if (stamp === W.qstamp) return;
   W.qstamp = stamp; W.queue = q;
   renderQueue(); renderPlan();
-  for (const t of (q.tasks || []).filter(t => t.status === 'queued')) await runTask(t);
 }
 setInterval(pollPlan, 3000);
 

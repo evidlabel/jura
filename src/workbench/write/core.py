@@ -2190,7 +2190,7 @@ def fb_rm(
     _ws(root, notes, ignore, follow_outside, no_gitignore, show).delete_feedback(id)
 
 
-# ---------- the roll's plan: the scheduler agent's tasks, and their resources ----------
+# ---------- the roll's plan: the top-level agent's tasks, and what each one got ----------
 QUEUE_MARKS = {"open": " ", "queued": ">", "sent": "*", "done": "x", "dropped": "-"}
 
 
@@ -2221,15 +2221,16 @@ def _print_queue(q: dict) -> None:
 
 
 def queue_ls(root: str) -> None:
-    """List the tasks the last roll was split into: id, status, effort, the harness row that
-    fits it, the items it covers, and its commit when done."""
+    """List the tasks the last roll was broken into: id, status, effort, the subagent that took
+    it, the items it covers, and its commit when done."""
     _print_queue(queue.read(_queue_root(root)))
 
 
 def queue_plan(spec: str, by: str, root: str) -> None:
-    """Record the scheduler's split of the last roll. SPEC is JSON (a list of tasks, or
+    """Record the top-level agent's split of the last roll. SPEC is JSON (a list of tasks, or
     {"tasks": [...]}) or "-" to read it from stdin. Each task: id, title, items (queue keys,
-    e.g. "fb:3" or "edit:README.md"), effort (cheap|standard|deep), agent (a harness row)."""
+    e.g. "fb:3" or "edit:README.md"), effort (cheap|standard|deep), agent (the subagent and
+    model that took it, or empty when the top agent kept it)."""
     text = sys.stdin.read() if spec in ("", "-") else spec
     try:
         data = json.loads(text)
@@ -2248,13 +2249,6 @@ def _queue_task(tid: str, status: str, root: str, commit: str = "", note: str = 
     if q is None:
         sys.exit(f"write: no task {tid} in the last roll's plan")
     _print_queue(q)
-
-
-def queue_start(ids: List[str], root: str) -> None:
-    """Ask the window to run these tasks: each goes to the harness row it names, which the
-    window starts if it is not open. The task then shows as sent until it is done or dropped."""
-    for tid in ids:
-        _queue_task(tid, "queued", root)
 
 
 def queue_done(id: str, commit: str, note: str, root: str) -> None:
@@ -2461,14 +2455,14 @@ app = cli(
         ),
         group(
             name="queue",
-            help="The last roll's plan: split it into tasks, give each an effort and a harness row, "
-            "start them on the row they fit, and record how each ended.",
+            help="The last roll's plan: how the top-level agent split it into tasks, the effort each "
+            "needs, the subagent that took it, and how each ended.",
             options=[NOTE_ROOT],
             commands=[
-                command(name="ls", help="List the plan: id, status, effort, harness row, items.", callback=queue_ls),
+                command(name="ls", help="List the plan: id, status, effort, subagent, items.", callback=queue_ls),
                 command(
                     name="plan",
-                    help="Record the scheduler's split (JSON tasks on stdin or as SPEC).",
+                    help="Record the top-level agent's split (JSON tasks on stdin or as SPEC).",
                     callback=queue_plan,
                     arguments=[
                         argument(
@@ -2479,13 +2473,7 @@ app = cli(
                             help='JSON: a list of tasks or {"tasks": [...]}; "-" reads stdin.',
                         )
                     ],
-                    options=[option(flags=["--by"], arg_type=str, default="", help="who made the plan (a harness row)")],
-                ),
-                command(
-                    name="start",
-                    help="Hand these tasks to the window, which runs each on its harness row.",
-                    callback=queue_start,
-                    arguments=[argument(name="ids", arg_type=str, nargs="+", help="task ids")],
+                    options=[option(flags=["--by"], arg_type=str, default="", help="which agent made the plan")],
                 ),
                 command(
                     name="done",
