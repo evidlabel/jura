@@ -34,6 +34,20 @@ to `manosfaeren` (æ→ae, ø→oe, å→aa); the display name keeps the æ.
 4. Annotate files, folders and lines. In the **Queue**, choose which of your new edits and notes go to which agent, then **Roll**.
 5. **Tag state…** marks the current version (`state/<date>-<name>`).
 
+## Why a queue
+
+An agent reads the case on every turn, and every token of it is paid for. Prompting one after
+each save sends the same files, the same annotations and the same instructions again and again,
+so most of what it reads is work it has already seen. The **Queue** holds the user's new edits,
+drafts, annotations and feedback since the last roll, and **Roll** sends them as one list: the
+harness is briefed once on a batch instead of once per keystroke, and nothing is sent twice.
+
+It also lets the human stay where the work is. Writing, annotating and reading continue without
+a detour to write a prompt, and the notes accumulate on their own. The agent then answers
+against a larger body of the human's work rather than a sentence it has just been handed, and
+its questions land where the answer already is. Fewer, fuller turns: a focused human on one
+side, an agent with the whole picture on the other.
+
 ## Where things go
 
 A new case comes with one opinionated layout, written into its `AGENTS.md` so an agent never has to work it out: documents in `docs/<topic>/<name>.typ`, the case map in `main.typ`, citations in `refs/refs.yml` (plus hand-added `refs/extra/*.yml`), evid's store in `evid/`, and every PDF in `out/`, mirroring its source (`docs/risk/notat.typ` → `out/docs/risk/notat.pdf`). `out/` is not in git. `jura compile <file.typ>` builds into it, and so does **Export PDF**. `jura layout` prints the layout and lists every file in the wrong place, with the `git mv` or `git rm` that fixes it.
