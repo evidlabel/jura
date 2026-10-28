@@ -48,6 +48,15 @@ against a larger body of the human's work rather than a sentence it has just bee
 its questions land where the answer already is. Fewer, fuller turns: a focused human on one
 side, an agent with the whole picture on the other.
 
+A roll arrives as items, not as a paragraph, which changes what the receiving agent can do with
+it. It reads the queue once, splits it along the files and the questions the items carry, and
+sends each piece where it is cheapest to answer: a rename, a typo or a moved line goes to a fast
+model, while the item that has to argue a point gets the thinking budget and the time. The Agent
+menu already lists one harness several times, a row per configuration, so a local model and a
+frontier one sit side by side; the item list is what tells a coordinating agent which is which.
+A batch that used to be one prompt on one model becomes several turns, each paid for at the
+price of its own difficulty.
+
 ## Where things go
 
 A new case comes with one opinionated layout, written into its `AGENTS.md` so an agent never has to work it out: documents in `docs/<topic>/<name>.typ`, the case map in `main.typ`, citations in `refs/refs.yml` (plus hand-added `refs/extra/*.yml`), evid's store in `evid/`, and every PDF in `out/`, mirroring its source (`docs/risk/notat.typ` → `out/docs/risk/notat.pdf`). `out/` is not in git. `jura compile <file.typ>` builds into it, and so does **Export PDF**. `jura layout` prints the layout and lists every file in the wrong place, with the `git mv` or `git rm` that fixes it.
