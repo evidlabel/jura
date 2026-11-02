@@ -16,7 +16,7 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 
-MINIMUM = {"evid": "0.8.0", "did": "0.3.2", "hudoc": "0.1.4", "lawcite": "0.2.0", "domdb": "0.1.4"}
+MINIMUM = {"evid": "0.8.0", "did": "0.3.2", "hudoc": "0.1.5", "lawcite": "0.2.1", "domdb": "0.1.4"}
 REQUIRED = ("evid", "did", "typst", "git", "bwrap")
 OPTIONAL = {
     "tinymist": "no live Typst preview",
