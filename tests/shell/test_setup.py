@@ -107,3 +107,8 @@ def test_unknown_template_is_rejected():
 def test_name_falls_back_to_id_for_blank():
     assert cases.create("2026-002").name == "2026-002"
     assert cases.create("2026-003", "Mine", "rent").name == "Mine"
+
+
+def test_plan_reinstalls_a_stale_source_tool():
+    (step,) = setup.plan({"domdb": "domdb did not print a version"}, uv=True, manager="", arch="x86_64", tinymist=False)
+    assert step.argv == ("uv", "tool", "install", "--upgrade", "domdb @ git+https://github.com/evidlabel/domdb")

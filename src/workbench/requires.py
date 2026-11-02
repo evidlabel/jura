@@ -3,6 +3,9 @@
 evid and did change their on-disk layout and their protocol with the workbench together
 with it, so each has a minimum version. The rest only need to be on PATH. ``problems``
 is what the window and ``jura open`` show; ``jura doctor`` prints every row.
+
+The source tools (hudoc, lawcite, domdb) are optional, but they carry a minimum
+version too: a stale one fetches the wrong text or does not start, and doctor says so.
 """
 
 from __future__ import annotations
@@ -13,7 +16,7 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 
-MINIMUM = {"evid": "0.8.0", "did": "0.3.2"}
+MINIMUM = {"evid": "0.8.0", "did": "0.3.2", "hudoc": "0.1.4", "lawcite": "0.2.0", "domdb": "0.1.4"}
 REQUIRED = ("evid", "did", "typst", "git", "bwrap")
 OPTIONAL = {
     "tinymist": "no live Typst preview",
@@ -21,6 +24,11 @@ OPTIONAL = {
     "pdftoppm": "PDFs in the Write tab (rendered to page images; the app window has no PDF viewer)",
     "workbench-app": "the browser is the window",
 }  # what is lost without it
+SOURCES = {
+    "hudoc": "no HUDOC search or PDF links",
+    "lawcite": "no statute lookup",
+    "domdb": "no Domsdatabasen bulk access",
+}  # optional, version-checked: what is lost without each
 
 _VERSION = re.compile(r"(\d+)\.(\d+)\.(\d+)")
 
@@ -47,10 +55,13 @@ def _key(v: str) -> tuple[int, ...]:
 
 
 def version_of(exe: str) -> str:
-    """The first x.y.z that ``EXE --version`` prints, or ""."""
+    """The first x.y.z that ``EXE --version`` prints, or "" (also when it exits non-zero:
+    a traceback can hold a version-like path)."""
     try:
         r = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=20)
     except (OSError, subprocess.SubprocessError):
+        return ""
+    if r.returncode != 0:
         return ""
     m = _VERSION.search(r.stdout + r.stderr)
     return m.group(0) if m else ""
@@ -74,3 +85,8 @@ def check(name: str) -> Tool:
 def problems() -> list[str]:
     """One line per required tool that is missing or too old."""
     return [t.problem for t in map(check, REQUIRED) if t.problem]
+
+
+def source_problems() -> dict[str, str]:
+    """{tool: problem} for each source tool that is missing, too old, or does not start."""
+    return {t.name: t.problem for t in map(check, SOURCES) if t.problem}

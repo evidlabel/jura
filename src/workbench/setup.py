@@ -5,7 +5,7 @@ after a yes. A step that needs sudo is asked for separately, and with ``--yes`` 
 and not run, so an agent harness that runs setup has to ask the user. Nothing that is
 already installed is replaced, except evid or did older than this workbench needs.
 
-- evid, did: ``uv tool install --upgrade`` from GitHub.
+- evid, did, and the source tools hudoc, lawcite, domdb: ``uv tool install --upgrade`` from GitHub.
 - git, bwrap: the distribution's package manager (sudo).
 - typst, tinymist: a pinned release binary into ``~/.local/bin`` (no sudo).
 - pdftotext (poppler), optional: the package manager (sudo).
@@ -35,6 +35,9 @@ START = "https://jura.sh/start/"
 UV_SOURCES = {  # the same lines as the install steps on jura.sh
     "evid": ("evid @ git+https://github.com/evidlabel/evid",),
     "did": ("--python", "3.12", "did[gui,models] @ git+https://github.com/evidlabel/did"),
+    "hudoc": ("hudoc @ git+https://github.com/evidlabel/hudoc",),
+    "lawcite": ("lawcite @ git+https://github.com/evidlabel/lawcite",),
+    "domdb": ("domdb @ git+https://github.com/evidlabel/domdb",),
 }
 TYPST = "0.13.1"  # as in CI
 TINYMIST = "0.15.8"
@@ -146,7 +149,9 @@ def ask(question: str, default: bool = True) -> bool:
 
 
 def _missing() -> dict[str, str]:
-    return {t.name: t.problem for t in map(requires.check, requires.REQUIRED) if t.problem}
+    """Required tools that are missing or too old, then the source tools (asked like the rest)."""
+    required = {t.name: t.problem for t in map(requires.check, requires.REQUIRED) if t.problem}
+    return {**required, **requires.source_problems()}
 
 
 def run(yes: bool = False, dry_run: bool = False, languages: str = "") -> None:

@@ -119,6 +119,13 @@ def _doctor_table() -> bool:
     for name, without in requires.OPTIONAL.items():
         path = found[name]()
         print(f"{'ok' if path else '--'}  {name:<14} {'-':<8} {path or f'not found ({without})'}")
+    for name, without in requires.SOURCES.items():  # optional, but a stale one is named
+        t = requires.check(name)
+        mark = "--" if not t.path else ("!!" if t.problem else "ok")
+        need = f"  (needs {requires.MINIMUM[name]}+)" if name in requires.MINIMUM else ""
+        print(f"{mark}  {name:<14} {t.version or '-':<8} {t.path or f'not found ({without})'}{need if t.path else ''}")
+        if t.path and t.problem:
+            print(f"    {t.problem}")
     return not bad
 
 

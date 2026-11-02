@@ -54,3 +54,24 @@ def test_state_carries_the_problems(tmp_path, monkeypatch):
     assert wb.state()["problems"] is None  # not checked yet: the page asks again
     wb.problems = ["evid 0.7.1 is older than this workbench needs (0.8.0 or newer)"]
     assert wb.state()["problems"] == wb.problems
+
+
+def test_source_tools_are_optional_but_named(tools, tmp_path, monkeypatch, capsys):
+    tools("0.8.0", "0.3.2")
+    monkeypatch.setenv("WORKBENCH_HUDOC_BIN", _stub(tmp_path, "hudoc", "0.1.3"))
+    broken = tmp_path / "domdb"  # a stale env: a traceback with a version-like path, exit 1
+    broken.write_text("#!/bin/sh\necho 'site-packages/treeparse-0.3.4/x.py ImportError' >&2\nexit 1\n")
+    broken.chmod(0o755)
+    monkeypatch.setenv("WORKBENCH_DOMDB_BIN", str(broken))
+    monkeypatch.setenv("WORKBENCH_LAWCITE_BIN", "/nonexistent/lawcite")
+
+    got = requires.source_problems()
+    assert got["hudoc"] == "hudoc 0.1.3 is older than this workbench needs (0.1.4 or newer)"
+    assert "did not print a version" in got["domdb"]
+    assert "not installed" in got["lawcite"]
+    assert requires.problems() == []  # the window only blocks on required tools
+
+    cli.main(["doctor"])  # optional: no exit 1
+    out = capsys.readouterr().out
+    assert "!!  hudoc" in out and "hudoc 0.1.3 is older" in out
+    assert "!!  domdb" in out and "--  lawcite" in out and "no statute lookup" in out
