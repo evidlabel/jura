@@ -1,3 +1,3 @@
 """jura workbench: one window for a case — Write (agent), evid and did."""
 
-__version__ = "0.2.1a1"
+__version__ = "0.2.2a1"

@@ -5,11 +5,11 @@
 A legal engineering workbench. One window for a legal case: write it with agents, next
 to its datasets and its anonymization.
 
-**Alpha.** This is a prototype. The header shows the running release (`0.2.1a1`). Features,
+**Alpha.** This is a prototype. The header shows the running release (`0.2.2a1`). Features,
 file formats and behaviour will change. The **?** button in the header says the same.
 
 ```
-jura.sh 0.2.1a1 / Tenancy dispute 2026-014 ▾                         theme ▾  ?
+jura.sh 0.2.2a1 / Tenancy dispute 2026-014 ▾                         theme ▾  ?
 Write agent · Datasets app · Anonymization app
 ```
 
