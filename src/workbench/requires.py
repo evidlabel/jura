@@ -16,7 +16,7 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 
-MINIMUM = {"evid": "0.8.0", "did": "0.3.2", "hudoc": "0.1.5", "lawcite": "0.2.1", "domdb": "0.1.4"}
+MINIMUM = {"evid": "0.8.0", "did": "0.3.2", "hudoc": "0.1.6", "lawcite": "0.2.1", "domdb": "0.1.4"}
 REQUIRED = ("evid", "did", "typst", "git", "bwrap")
 OPTIONAL = {
     "tinymist": "no live Typst preview",
@@ -25,7 +25,7 @@ OPTIONAL = {
     "workbench-app": "the browser is the window",
 }  # what is lost without it
 SOURCES = {
-    "hudoc": "no HUDOC search or PDF links",
+    "hudoc": "no HUDOC search or PDF downloads",
     "lawcite": "no statute lookup",
     "domdb": "no Domsdatabasen bulk access",
 }  # optional, version-checked: what is lost without each

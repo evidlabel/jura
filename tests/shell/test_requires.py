@@ -66,7 +66,7 @@ def test_source_tools_are_optional_but_named(tools, tmp_path, monkeypatch, capsy
     monkeypatch.setenv("WORKBENCH_LAWCITE_BIN", "/nonexistent/lawcite")
 
     got = requires.source_problems()
-    assert got["hudoc"] == "hudoc 0.1.4 is older than this workbench needs (0.1.5 or newer)"
+    assert got["hudoc"] == "hudoc 0.1.4 is older than this workbench needs (0.1.6 or newer)"
     assert "did not print a version" in got["domdb"]
     assert "not installed" in got["lawcite"]
     assert requires.problems() == []  # the window only blocks on required tools
