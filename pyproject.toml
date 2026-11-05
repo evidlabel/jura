@@ -8,7 +8,7 @@ version = "0.2.2a1"
 description = "jura workbench: write a case with agents next to evid and did, in one window."
 requires-python = ">=3.12"
 license = "MIT"
-license-files = ["LICENSE", "src/workbench/write/LICENSE-treedit.txt", "src/workbench/write/vendor/LICENSE-xterm.txt"]
+license-files = ["LICENSE", "src/workbench/write/LICENSE-treedit.txt", "src/workbench/write/vendor/LICENSE-*.txt"]
 dependencies = [
     "treeparse>=0.4.0",
 ]

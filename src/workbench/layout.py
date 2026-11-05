@@ -31,7 +31,8 @@ Every file has one place. `jura layout` lists anything elsewhere, with the fix
 ```
 AGENTS.md                these rules
 workbench.yml            linked sets, skills, harnesses (the workbench writes it)
-main.typ                 the case map: the question, the line, what is open
+README.md                the driving document: question, position, open issues and next steps
+main.typ                 the typeset case map: the question, the line, what is open
 {DOCS}/<topic>/<name>.typ   every memo, notat, brief or letter: one folder per document,
                          its images and data beside it
 {REFS}            the one citation file: `jura gather` writes it, never edit it

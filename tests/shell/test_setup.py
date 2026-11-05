@@ -112,3 +112,17 @@ def test_name_falls_back_to_id_for_blank():
 def test_plan_reinstalls_a_stale_source_tool():
     (step,) = setup.plan({"domdb": "domdb did not print a version"}, uv=True, manager="", arch="x86_64", tinymist=False)
     assert step.argv == ("uv", "tool", "install", "--upgrade", "domdb @ git+https://github.com/evidlabel/domdb")
+
+
+@pytest.mark.parametrize("key", list(templates.TEMPLATES))
+def test_readme_drives_new_case(key):
+    c = cases.create("readme-" + key, template=key)
+    readme = (c.workdir / "README.md").read_text("utf-8")
+    t = templates.get(key)
+    assert t.question in readme and t.main in readme
+    for heading in ("Question", "Working position", "Open issues", "Next steps", "Documents"):
+        assert f"## {heading}" in readme
+    assert "[main.typ](main.typ)" in readme
+    assert "Start with `README.md`" in (c.workdir / "AGENTS.md").read_text("utf-8")
+    tracked = subprocess.run(["git", "-C", str(c.workdir), "ls-files"], capture_output=True, text=True, check=True)
+    assert "README.md" in tracked.stdout.splitlines()

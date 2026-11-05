@@ -67,20 +67,36 @@ header { background: var(--nav); border-bottom: 1px solid var(--line); padding: 
 #casebtn { min-height: 42px; font-size: 16px; font-weight: 600; gap: 10px; }
 #casebtn .mono { font-size: 13px; font-weight: 400; color: var(--muted); }
 .picker { position: relative; }
-#casemenu { position: absolute; top: 48px; left: 0; z-index: 20; width: 380px; max-height: min(72vh, 620px); padding: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px hsla(222,30%,10%,.16); display: flex; flex-direction: column; }
-#casemenu[hidden] { display: none; }
-#casefind { flex: none; min-height: 34px; margin: 0 0 4px; padding: 0 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); font: inherit; }
-#casefind:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-#caselist { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-#casecount { flex: none; margin: 2px 0 0; padding: 0 6px; font-size: 11.5px; color: var(--muted); }
-#caselist .none { display: block; color: var(--muted); cursor: default; font-size: 13px; }
-.mi { width: 100%; display: flex; justify-content: space-between; gap: 16px; align-items: center; min-height: 42px; padding: 0 12px; border: 0; background: none; border-radius: 6px; cursor: pointer; text-align: left; }
-.mi:hover, .mi.on, .mi.act { background: var(--accent-low); }
+#casebtn { max-width: min(480px, calc(100vw - 40px)); }
+#casename { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#casemenu { position: fixed; top: 72px; left: 50%; transform: translateX(-50%); z-index: 20; width: min(640px, calc(100vw - 24px)); height: min(640px, calc(100dvh - 88px)); padding: 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 16px 64px hsla(222,30%,10%,.35); display: flex; flex-direction: column; gap: 12px; }
+.library-head, .library-tools, .library-footer { display: flex; align-items: center; gap: 10px; flex: none; }
+.library-head h2 { margin: 0; font-size: 20px; }
+.library-head .btn:last-child { margin-left: auto; }
+#casebrowse { display: flex; flex-direction: column; gap: 12px; min-height: 0; flex: 1; }
+#casefind { flex: none; width: 100%; min-height: 42px; padding: 0 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+#casemenu :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.library-tools select { min-width: 0; max-width: 48%; margin-left: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); padding: 6px; }
+.library-tools button[aria-pressed="true"] { background: var(--accent-low); border-color: var(--accent); }
+#caselist { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+#casecount { margin: 0; font-size: 12px; color: var(--muted); }
+.library-footer { border-top: 1px solid var(--line); padding-top: 12px; justify-content: space-between; }
+.case-row { display: flex; align-items: center; border-bottom: 1px solid var(--line); border-radius: 6px; }
+.case-row.on { background: var(--accent-low); }
+.mi { flex: 1; min-width: 0; display: flex; gap: 12px; align-items: center; min-height: 66px; padding: 10px; border: 0; background: none; border-radius: 6px; cursor: pointer; text-align: left; }
+.mi:hover { background: var(--sunk); }
 .mi.act { box-shadow: inset 0 0 0 2px var(--accent); }
-.mi span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mi .mono { font-size: 12px; color: var(--muted); }
-#newcase { border-top: 1px solid var(--line); margin-top: 6px; padding: 8px 6px 4px; display: grid; gap: 6px; }
-#newcase input, #newcase select, #start input { border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 6px; min-height: 34px; padding: 0 10px; }
+.case-copy { min-width: 0; flex: 1; display: grid; gap: 3px; }
+.case-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.case-meta { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.case-current { font-size: 11px; color: var(--accent); }
+.pin { border: 0; background: none; color: var(--muted); padding: 12px; cursor: pointer; font-size: 20px; border-radius: 6px; }
+.pin[aria-pressed="true"] { color: var(--accent); }
+.none { color: var(--muted); padding: 24px 12px; text-align: center; }
+#case-more { margin: 12px auto; display: flex; }
+#newcase { overflow-y: auto; display: grid; gap: 16px; }
+#newcase label { display: grid; gap: 6px; }
+#newcase input, #newcase select, #start input { border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 6px; min-height: 38px; padding: 0 10px; }
 .field { display: grid; gap: 3px; }
 .idhint { font-size: 11.5px; line-height: 1.35; color: var(--muted); }
 .spacer { flex: 1; }
@@ -150,17 +166,26 @@ main { flex: 1; position: relative; min-height: 0; }
       <button class="btn" id="casebtn" aria-haspopup="dialog" aria-controls="casemenu" aria-expanded="false"><span id="casename">No case</span><span class="mono" id="caseid"></span>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
       <div id="casemenu" role="dialog" aria-label="Cases" hidden>
-        <input id="casefind" type="search" placeholder="Find a case: id or name" aria-label="Find a case" autocomplete="off" spellcheck="false">
-        <div id="caselist" role="listbox" aria-label="Cases"></div>
-        <p id="casecount" aria-live="polite"></p>
-        <form id="newcase">
-          <div class="field">
-            <input id="nc-id" placeholder="Case id, e.g. 2026-015" required pattern="[A-Za-z0-9][A-Za-z0-9._\-]{0,63}" aria-label="Case id" title="Letters a–z, digits, &quot;.&quot;, &quot;_&quot; or &quot;-&quot;; æ becomes ae, ø oe, å aa.">
-            <span class="idhint" id="nc-idhint">a–z, 0–9, . _ - · æ→ae, ø→oe, å→aa</span>
+        <div class="library-head"><h2 id="library-title">Case library</h2><button class="btn" id="caseclose" aria-label="Close case library">✕</button></div>
+        <div id="casebrowse">
+          <input id="casefind" type="search" placeholder="Search by name or case ID…" aria-label="Find a case" autocomplete="off" spellcheck="false">
+          <div class="library-tools">
+            <button class="btn" id="filter-all" aria-pressed="true">All cases</button>
+            <button class="btn" id="filter-pinned" aria-pressed="false">Pinned</button>
+            <select id="casesort" aria-label="Sort cases"><option value="updated">Recently updated</option><option value="name">Name A–Z</option><option value="id">Case ID A–Z</option></select>
           </div>
-          <input id="nc-name" placeholder="Name (default: the template's)" aria-label="Case name">
-          <select id="nc-tpl" aria-label="What the case map starts with"></select>
-          <button class="btn primary" type="submit">+ New case</button>
+          <div id="caselist" role="list" aria-label="Cases"></div>
+          <div class="library-footer"><p id="casecount" aria-live="polite"></p><button class="btn primary" id="casecreate">+ New case</button></div>
+        </div>
+        <form id="newcase" hidden>
+          <button class="btn" id="caseback" type="button">← Back to cases</button>
+          <label>Case ID
+            <input id="nc-id" placeholder="e.g. 2026-015" required pattern="[A-Za-z0-9][A-Za-z0-9._\-]{0,63}" aria-describedby="nc-idhint">
+            <span class="idhint" id="nc-idhint">a–z, 0–9, . _ - · æ→ae, ø→oe, å→aa</span>
+          </label>
+          <label>Name <input id="nc-name" placeholder="Optional; defaults to the template’s name"></label>
+          <label>Starting template <select id="nc-tpl"></select></label>
+          <button class="btn primary" type="submit">Create case</button>
         </form>
       </div>
     </div>
@@ -206,7 +231,7 @@ main { flex: 1; position: relative; min-height: 0; }
 <main>
   <div id="empty" hidden><form id="start">
     <h2>Start a case</h2>
-    <p>A case is a folder on this machine, tracked in git. Its map, <span class="mono">main.typ</span>, states the question. Pick what it starts with; you can change all of it.</p>
+    <p>A case is a folder on this machine, tracked in git. Its driving document, <span class="mono">README.md</span>, states the question and next steps. Pick what it starts with; you can change all of it.</p>
     <div class="needs" id="start-needs" hidden><b>Some tools are missing or too old:</b><ul></ul>Run <span class="mono">jura setup</span> in a terminal: it installs them and asks before sudo.</div>
     <label>Case id<input id="st-id" required pattern="[A-Za-z0-9][A-Za-z0-9._\-]{0,63}" autocomplete="off" title="Letters a–z, digits, &quot;.&quot;, &quot;_&quot; or &quot;-&quot;; æ becomes ae, ø oe, å aa."><span class="idhint" id="st-idhint">a–z, 0–9, . _ - · æ→ae, ø→oe, å→aa</span></label>
     <div id="tpls" role="group" aria-label="What the case map starts with"></div>
@@ -283,49 +308,91 @@ function fold(s) {
   return String(s).normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[æÆøØåÅ]/g, c => ID_FOLD[c]).toLowerCase();
 }
 function current() { return S.state && S.state.cases.find(c => c.id === S.state.current); }
-const LIST_MAX = 200;  // rows drawn at a time; a history of thousands still opens at once
+const LIST_MAX = 100;
+let caseLimit = LIST_MAX, pinnedOnly = false;
+function pinnedCases() {
+  const pins = load('casePins', []);
+  return new Set(Array.isArray(pins) ? pins : []);
+}
 function caseHits(q) {
-  const words = fold(q).split(/\s+/).filter(Boolean);
+  const words = fold(q).split(/\s+/).filter(Boolean), pins = pinnedCases();
+  const sort = $('#casesort').value;
   return S.state.cases
-    .filter(k => { const hay = fold(k.id + ' ' + k.name); return words.every(w => hay.includes(w)); })
-    .sort((a, b) => (b.updated - a.updated) || a.id.localeCompare(b.id));  // the history's recent end first
+    .filter(k => (!pinnedOnly || pins.has(k.id)) && words.every(w => fold(k.id + ' ' + k.name).includes(w)))
+    .sort((a, b) => Number(pins.has(b.id)) - Number(pins.has(a.id)) ||
+      (sort === 'updated' ? b.updated - a.updated : (a[sort] || a.id).localeCompare(b[sort] || b.id, undefined, { numeric: true })) || a.id.localeCompare(b.id));
 }
 function renderCases() {
-  const c = current();
+  if (!S.state) return;
+  const c = current(), pins = pinnedCases();
   $('#casename').textContent = c ? c.name : 'No case';
-  $('#caseid').textContent = c ? c.id : '';
+  $('#caseid').textContent = c && c.name !== c.id ? c.id : '';
   $('#empty').hidden = !!c;
   renderStart();
-  const find = $('#casefind'), q = find ? find.value.trim() : '';
-  const total = S.state.cases.length, hits = caseHits(q), shown = hits.slice(0, LIST_MAX);
+  const q = $('#casefind').value.trim(), hits = caseHits(q), shown = hits.slice(0, caseLimit);
   const list = $('#caselist'); list.textContent = '';
   shown.forEach((k, i) => {
+    const on = c && k.id === c.id;
+    const row = document.createElement('div'); row.className = 'case-row' + (on ? ' on' : ''); row.setAttribute('role', 'listitem');
     const b = document.createElement('button');
-    b.type = 'button'; b.id = 'case-opt-' + i;
-    b.className = 'mi' + (c && k.id === c.id ? ' on' : ''); b.setAttribute('role', 'option');
-    b.setAttribute('aria-selected', String(!!c && k.id === c.id));
-    b.innerHTML = '<span></span><span class="mono"></span>';
-    b.firstChild.textContent = k.name; b.lastChild.textContent = k.id;
+    b.type = 'button'; b.id = 'case-opt-' + i; b.className = 'mi';
+    if (on) b.setAttribute('aria-current', 'true');
+    b.innerHTML = '<span class="case-copy"><span class="case-title"></span><span class="case-meta"></span></span>';
+    b.querySelector('.case-title').textContent = k.name || k.id;
+    const date = k.updated ? new Date(k.updated * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+    b.querySelector('.case-meta').textContent = [k.name !== k.id ? k.id : '', date ? 'Updated ' + date : ''].filter(Boolean).join(' · ');
+    b.title = [k.name, k.id].filter(Boolean).join(' · ');
+    if (on) { const tag = document.createElement('span'); tag.className = 'case-current'; tag.textContent = 'Current'; b.append(tag); }
     b.onclick = () => selectCase(k.id);
-    list.append(b);
+    const pin = document.createElement('button'); pin.type = 'button'; pin.className = 'pin';
+    pin.textContent = pins.has(k.id) ? '★' : '☆';
+    pin.setAttribute('aria-pressed', String(pins.has(k.id)));
+    pin.title = (pins.has(k.id) ? 'Unpin ' : 'Pin ') + (k.name || k.id);
+    pin.setAttribute('aria-label', pin.title);
+    pin.onclick = e => {
+      e.stopPropagation();
+      const scroll = list.scrollTop;
+      if (pins.has(k.id)) pins.delete(k.id); else pins.add(k.id);
+      store('casePins', [...pins]); renderCases(); list.scrollTop = scroll;
+      const index = caseHits(q).findIndex(item => item.id === k.id);
+      (list.children[index]?.querySelector('.pin') || $('#filter-pinned')).focus();
+    };
+    row.append(b, pin); list.append(row);
   });
   if (!hits.length) {
-    const p = document.createElement('p');
-    p.className = 'mi none';
-    p.textContent = q ? `No case matches “${q}”. Create it below.` : 'No cases yet. Create one below.';
+    const p = document.createElement('p'); p.className = 'none';
+    p.textContent = q ? `No cases match “${q}”. Try another name or ID.` : pinnedOnly ? 'No pinned cases yet. Use the star beside a case to keep it here.' : 'No cases yet. Create a case to get started.';
     list.append(p);
   }
+  if (shown.length < hits.length) {
+    const more = document.createElement('button'); more.id = 'case-more'; more.className = 'btn'; more.textContent = 'Show more cases';
+    more.onclick = e => { e.stopPropagation(); const scroll = list.scrollTop, next = shown.length; caseLimit += LIST_MAX; renderCases(); list.scrollTop = scroll; $('#case-opt-' + next)?.focus(); };
+    list.append(more);
+  }
   S.active = -1;
-  if (find) find.removeAttribute('aria-activedescendant');
-  $('#casecount').textContent = !total ? 'No cases yet'
-    : hits.length === total ? `${total} ${total === 1 ? 'case' : 'cases'} · recent first`
-    : `${hits.length} of ${total} match` + (shown.length < hits.length ? ` · showing ${shown.length}` : '');
+  $('#casecount').textContent = `${hits.length} ${hits.length === 1 ? 'case' : 'cases'}` + (q || pinnedOnly ? ` of ${S.state.cases.length}` : '') + (shown.length < hits.length ? ` · ${shown.length} shown` : '');
 }
+function creation(open) {
+  $('#casebrowse').hidden = open; $('#newcase').hidden = !open;
+  $('#library-title').textContent = open ? 'New case' : 'Case library';
+  (open ? $('#nc-id') : $('#casefind')).focus();
+}
+$('#casecreate').onclick = () => creation(true);
+$('#caseback').onclick = () => creation(false);
+$('#caseclose').onclick = () => menu(false);
+for (const [id, only] of [['filter-all', false], ['filter-pinned', true]]) {
+  $('#' + id).onclick = () => {
+    pinnedOnly = only; caseLimit = LIST_MAX;
+    $('#filter-all').setAttribute('aria-pressed', String(!only)); $('#filter-pinned').setAttribute('aria-pressed', String(only)); renderCases();
+  };
+}
+$('#casesort').value = load('caseSort', 'updated');
+if (!$('#casesort').value) $('#casesort').value = 'updated';
+$('#casesort').onchange = () => { store('caseSort', $('#casesort').value); caseLimit = LIST_MAX; renderCases(); };
 function menu(open) {
   const m = $('#casemenu'), find = $('#casefind');
   if (open && m.hidden) {
-    find.value = ''; renderCases(); m.hidden = false; find.focus();
-    const on = $('#caselist .mi.on'); if (on) on.scrollIntoView({ block: 'center' });
+    find.value = ''; caseLimit = LIST_MAX; renderCases(); m.hidden = false; creation(false); $('#caselist').scrollTop = 0;
   } else if (!open) {
     const hadFocus = m.contains(document.activeElement);
     m.hidden = true;
@@ -334,19 +401,21 @@ function menu(open) {
   }
   $('#casebtn').setAttribute('aria-expanded', String(!m.hidden));
 }
-$('#casefind').addEventListener('input', renderCases);
-$('#casefind').addEventListener('keydown', e => {
+$('#casefind').addEventListener('input', () => { caseLimit = LIST_MAX; renderCases(); $('#caselist').scrollTop = 0; });
+$('#casebrowse').addEventListener('keydown', e => {
+  if (e.target !== $('#casefind') && !e.target.matches('.mi')) return;
   const items = [...$('#caselist').querySelectorAll('.mi')];
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
     e.preventDefault();
     if (!items.length) return;
+    S.active = items.indexOf(document.activeElement);
     S.active = (S.active < 0 ? (e.key === 'ArrowDown' ? 0 : items.length - 1) : S.active + (e.key === 'ArrowDown' ? 1 : -1));
     S.active = (S.active + items.length) % items.length;
     items.forEach((b, i) => b.classList.toggle('act', i === S.active));
     items[S.active].scrollIntoView({ block: 'nearest' });
-    e.currentTarget.setAttribute('aria-activedescendant', items[S.active].id);
+    items[S.active].focus();
   } else if (e.key === 'Enter') {
-    const pick = items[S.active] || (items.length === 1 ? items[0] : null);
+    const pick = items.includes(document.activeElement) ? document.activeElement : (items.length === 1 ? items[0] : null);
     if (pick) { e.preventDefault(); pick.click(); }
   }
 });
@@ -354,6 +423,12 @@ $('#casebtn').onclick = e => { e.stopPropagation(); menu($('#casemenu').hidden);
 document.addEventListener('click', e => { if (!e.target.closest('.picker')) menu(false); });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') menu(false);
+  if (e.key === 'Tab' && !$('#casemenu').hidden) {
+    const focusable = [...$('#casemenu').querySelectorAll('button, input, select')].filter(el => el.getClientRects().length && !el.disabled);
+    const first = focusable[0], last = focusable.at(-1);
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
   if (tabKey(e)) { e.preventDefault(); cycle(e.key === 'PageDown' ? 1 : -1); return; }
   const k = e.key.toLowerCase();  // Ctrl+W / Ctrl+Q quit the window (Cmd on macOS)
   if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (k === 'q' || k === 'w')) { e.preventDefault(); quit(); }
@@ -471,7 +546,7 @@ async function mount(tab, c) {
   if (tab === 'did') u.searchParams.set('embed', '1');
   if (tab === 'evid' && c.evidSet) u.searchParams.set('set', c.evidSet);
   if (tab === 'write' && S.fresh === c.id) {  // a case just made here: open its map, with the preview
-    u.searchParams.set('panes', 'preview'); u.hash = 'main.typ'; S.fresh = null;
+    u.searchParams.set('panes', 'preview'); u.hash = 'README.md'; S.fresh = null;
   }
   const f = document.createElement('iframe');
   f.title = label; f.src = u.href;

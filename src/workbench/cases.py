@@ -86,7 +86,8 @@ background: the user's saves as `user:`, other changes as `agent:`.
   `jura write context`. Answer each with `jura write fb reply ID "what changed (hash)" --done`.
 - Personal data stays in `~/did_workdirs`. That directory is outside this sandbox on
   purpose. Do not try to reach it.
-- `main.typ` is the case map. Memos and briefs are other files, under `docs/`. Keep the map current.
+- Start with `README.md`: the driving document for the question, working position, open issues and next steps.
+  Keep it current as the case develops. Write memos and briefs under `docs/`; `main.typ` is available for a typeset map.
 """
 
 
@@ -221,6 +222,21 @@ def main_source(cid: str, name: str, template: str = "blank") -> str:
     return re.sub("|".join(parts), lambda m: parts[m.group(0)], MAIN_TYP)
 
 
+def readme_source(cid: str, name: str, template: str = "blank") -> str:
+    """The case's driving document, readable before any evidence has been linked."""
+    t = templates.get(template)
+    sections = [("Question", t.question), ("Working position", t.main),
+                ("What would defeat it", t.defeat), ("Outside scope", t.left_alone),
+                ("Open issues", "\n".join(f"- [ ] {x}" for x in t.open)),
+                ("Next steps", "\n".join(f"- [ ] Collect: {x}" for x in t.collect) or
+                 "- [ ] Refine the question.\n- [ ] Connect sources and identify the first memo to write.")]
+    return (f"# {name}\n\nCase: `{cid}`\n\n"
+            "This README drives the case. Keep the question, position and next steps current.\n\n" +
+            "\n\n".join(f"## {heading}\n\n{body}" for heading, body in sections) +
+            "\n\n## Documents\n\nWrite memos and briefs in [docs/](docs/). "
+            "Use [main.typ](main.typ) for a typeset map and PDF export.\n")
+
+
 def load(workdir: Path) -> Case:
     cfg = read_config(workdir)
     return Case(
@@ -286,6 +302,7 @@ def create(cid: str, name: str = "", template: str = "blank") -> Case:
         ),
     )
     (workdir / "AGENTS.md").write_text(AGENTS_MD.format(id=cid, name=name) + "\n" + LAYOUT, "utf-8")
+    (workdir / "README.md").write_text(readme_source(cid, name, t.key), "utf-8")
     (workdir / "main.typ").write_text(main_source(cid, name, t.key), "utf-8")
     for keep in (DOCS, REFS_EXTRA):  # git keeps no empty folder
         (workdir / keep).mkdir(parents=True)
@@ -297,7 +314,7 @@ def create(cid: str, name: str = "", template: str = "blank") -> Case:
         f"{OUT}/\n.pull-state.json\n.labels.lock\n.feedback.lock\nvecdb/\n{EVID_PDF_IGNORE}\n", "utf-8"
     )
     _git(workdir, "init", "-q")
-    _git(workdir, "add", CONFIG_NAME, "AGENTS.md", "main.typ", f"{DOCS}/.gitkeep", f"{REFS_EXTRA}/.gitkeep", ".gitignore")
+    _git(workdir, "add", CONFIG_NAME, "AGENTS.md", "README.md", "main.typ", f"{DOCS}/.gitkeep", f"{REFS_EXTRA}/.gitkeep", ".gitignore")
     _git(workdir, "commit", "-q", "-m", f"workbench: new case {cid}" + ("" if t.key == "blank" else f" ({t.key})"))
     return load(workdir)
 

@@ -57,7 +57,7 @@ def test_create_case(roots):
     assert "__ID__" not in main and "#import" not in main and "evid-set" not in main
     assert [a["name"] for a in casefile.read_config(c.workdir).agents] == ["claude", "codex", "grok", "opencode"]
     tracked = subprocess.run(["git", "-C", str(c.workdir), "ls-files"], capture_output=True, text=True).stdout.split()
-    assert sorted(tracked) == [".gitignore", "AGENTS.md", "docs/.gitkeep", "main.typ", "refs/extra/.gitkeep", "workbench.yml"]
+    assert sorted(tracked) == [".gitignore", "AGENTS.md", "README.md", "docs/.gitkeep", "main.typ", "refs/extra/.gitkeep", "workbench.yml"]
     log = subprocess.run(["git", "-C", str(c.workdir), "log", "--oneline"], capture_output=True, text=True)
     assert "workbench: new case 2026-014" in log.stdout
     assert [x.id for x in cases.list_cases()] == ["2026-014"]

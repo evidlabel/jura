@@ -28,7 +28,7 @@ to `manosfaeren` (æ→ae, ø→oe, å→aa); the display name keeps the æ.
 
 ## The flow
 
-1. `jura case new 2026-014 "Tenancy dispute"` creates `~/cases/2026-014/`, the git-tracked workdir (`workbench.yml`, `AGENTS.md`, `main.typ`, and empty `docs/`, `refs/extra/` and `out/`). Its agents are Claude, Codex, Grok and OpenCode. One that is not installed is greyed out in the Agent menu. It does not create a did folder and it does not create a global evid set.
+1. `jura case new 2026-014 "Tenancy dispute"` creates `~/cases/2026-014/`, the git-tracked workdir (`workbench.yml`, `AGENTS.md`, `README.md`, `main.typ`, and empty `docs/`, `refs/extra/` and `out/`). Its agents are Claude, Codex, Grok and OpenCode. One that is not installed is greyed out in the Agent menu. It does not create a did folder and it does not create a global evid set.
 2. In **Anonymization**, create a did set and add the case files. The set lives under `~/did_workdirs/<set>/`, outside the case. That same set shows up in Write.
 3. In **Write**, the Sources pane is two pools of pills. Evid pills (one color) link a global set or a local set under `evid/plain/`. Did pills (the other color) are the sets from Anonymization: connect one, and choose how the PDF is labelled (`placeholder` by default, or `faker`, `anon`, `pseudo`). Connecting a set writes those PDFs into this case's evid directory, `evid/anon/anon_set_<set>/`. **Hand off** writes them again. A connected did pill is marked stale when a document is added or the extracted keys change. **Gather** (or `jura gather`, for agents) writes one merged `refs/refs.yml` for the linked sets. It is the case's only citation file: any `.typ` file, in any folder, loads it as `yaml("/refs/refs.yml")`, and labquote prints only the entries it cites. Any other `refs.yml` in the case is not read, and Gather lists it as stray. Citations from outside evid (a lawcite statute, …) go in `refs/extra/*.yml`, which Gather merges in.
 4. Annotate files, folders and lines. In the **Queue**, choose which of your new edits and notes go to which agent, then **Roll**: the top-level agent splits them into tasks for its subagents, and the Queue shows them.
@@ -52,7 +52,7 @@ A roll sends what is new since the last roll — saves, drafts, annotations, fee
 
 ## Where things go
 
-A new case comes with one opinionated layout, written into its `AGENTS.md` so an agent never has to work it out: documents in `docs/<topic>/<name>.typ`, the case map in `main.typ`, citations in `refs/refs.yml` (plus hand-added `refs/extra/*.yml`), evid's store in `evid/`, and every PDF in `out/`, mirroring its source (`docs/risk/notat.typ` → `out/docs/risk/notat.pdf`). `out/` is not in git. `jura compile <file.typ>` builds into it, and so does **Export PDF**. `jura layout` prints the layout and lists every file in the wrong place, with the `git mv` or `git rm` that fixes it.
+A new case comes with one opinionated layout, written into its `AGENTS.md` so an agent never has to work it out: documents in `docs/<topic>/<name>.typ`, the driving document in `README.md` and a typeset map in `main.typ`, citations in `refs/refs.yml` (plus hand-added `refs/extra/*.yml`), evid's store in `evid/`, and every PDF in `out/`, mirroring its source (`docs/risk/notat.typ` → `out/docs/risk/notat.pdf`). `out/` is not in git. `jura compile <file.typ>` builds into it, and so does **Export PDF**. `jura layout` prints the layout and lists every file in the wrong place, with the `git mv` or `git rm` that fixes it.
 
 ## Why Typst, and git
 
@@ -144,3 +144,16 @@ The Write tab is a fork of [wr1/treedit](https://github.com/wr1/treedit) at `94e
 ## License
 
 MIT, see [LICENSE](LICENSE).
+
+Markdown files (`.md` and `.markdown`) preview live beside the editor, including unsaved edits, tables and local images. Enable **Mermaid** in the preview header to render fenced `mermaid` blocks; otherwise they remain code. Rendering works offline. New cases open `README.md`, which carries the question, working position, open issues and next steps. Typst documents still offer live preview and PDF export.
+
+For a diagram, enable **Mermaid** and add a fenced block:
+
+````markdown
+```mermaid
+flowchart LR
+  Question --> Sources --> Memo --> Decision
+```
+````
+
+Typst preview defaults to **On save**, which keeps large bibliographies out of the typing path. Use **Refresh** to preview unsaved text, or choose **After typing** for automatic updates after a pause. The refresh preference is saved in this browser.

@@ -1935,6 +1935,10 @@ class Handler(BaseHTTPRequestHandler):
 
 
 VENDOR = {
+    "markdown-preview.html": "text/html; charset=utf-8",
+    "markdown-preview.js": "text/javascript; charset=utf-8",
+    "markdown-it.min.js": "text/javascript; charset=utf-8",
+    "mermaid.min.js": "text/javascript; charset=utf-8",
     "xterm.js": "text/javascript; charset=utf-8",
     "xterm.css": "text/css; charset=utf-8",
     "addon-fit.js": "text/javascript; charset=utf-8",

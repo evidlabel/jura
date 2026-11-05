@@ -3,6 +3,8 @@
 tinymist serves the rendered pages (data plane, shown in an iframe next to the editor) and takes
 editor events on its control plane: unsaved buffers (`updateMemoryFiles`) so the preview follows
 typing, and cursor jumps (`panelScrollTo`). It asks the editor to scroll with `editorScrollTo`.
+A file sent that way is compiled from memory only, and its disk changes are ignored until the page
+sends `removeMemoryFiles`; the page does that once the file is not open in the editor.
 
 The binary: $TINYMIST, else `tinymist` on PATH, else the newest VS Code extension's copy.
 Previews nobody looked at for IDLE seconds stop; at most MAX run at once (oldest stops first).

@@ -446,7 +446,8 @@ html.embed .ptoggles:has(#pt-preview[hidden]){display:none}  /* Preview is its o
 #previewpane{width:var(--pv-w);min-width:300px;max-width:60vw;flex:0 1 var(--pv-w);display:flex;flex-direction:column;border-left:1px solid var(--line);background:var(--panel)}
 #previewpane[hidden],#sidepane[hidden],#skillpane[hidden],#queuepane[hidden]{display:none}
 #pvbody{flex:1;min-height:0;position:relative}
-#pvframe{width:100%;height:100%;border:0;display:block;background:var(--panel)}
+#pvframe[hidden],#mdframe[hidden]{display:none}
+#pvframe,#mdframe{width:100%;height:100%;border:0;display:block;background:var(--panel)}
 #pvmsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:20px;text-align:center;color:var(--dim);font-size:13px;white-space:pre-wrap}
 #pvmsg[hidden]{display:none}
 #pvmsg.err{color:var(--danger);font-family:var(--mono);font-size:12px;align-items:flex-start;justify-content:flex-start;overflow:auto}
@@ -574,7 +575,7 @@ html.embed .ptoggles:has(#pt-preview[hidden]){display:none}  /* Preview is its o
       </div></details>
       <button id="b-focus" type="button" aria-pressed="false" title="Blur the rest of the window, keeping the editor. Esc leaves focus. Ctrl+\ toggles it.">Focus</button>
       <span class="ptoggles" role="group" aria-label="Panes">
-        <button id="pt-preview" aria-pressed="false" title="Typst preview (tinymist) to the right of the editor">Preview</button>
+        <button id="pt-preview" aria-pressed="false" title="Markdown or Typst preview beside the editor">Preview</button>
         <button id="pt-skills" aria-pressed="false" title="The skills this case's agents can load">Skillset</button>
         <button id="pt-queue" aria-pressed="false" title="Your new edits and annotations, to roll to an agent">Queue<span id="qcount" class="qn" hidden></span></button>
       </span>
@@ -609,8 +610,8 @@ html.embed .ptoggles:has(#pt-preview[hidden]){display:none}  /* Preview is its o
   </section>
   <div id="dividerpv" hidden title="Drag to resize the preview"></div>
   <section id="previewpane" hidden aria-label="Typst preview">
-    <div class="phead"><span>Preview</span><span class="kind">tinymist</span><span id="pvstate" class="kind"></span><span id="pvbad" hidden title="The last compile failed: the preview is stale">error</span><span class="spacer"></span><button id="pv-reload" title="Reload the preview" aria-label="Reload the preview">↻</button><button id="pv-pdf" title="typst compile to out/ (the same path, .pdf)">Export PDF</button></div>
-    <div id="pvbody"><div id="pverr" role="alert" hidden><b>Not compiling.</b> <span id="pverr-what"></span><div id="pverr-list"></div></div><iframe id="pvframe" title="Typst preview"></iframe><div id="pvmsg">Open a .typ file to preview it.</div></div>
+    <div class="phead"><span>Preview</span><span class="kind" id="pvengine">tinymist</span><select id="pv-refresh-mode" aria-label="Typst preview refresh" title="On save avoids recompiling large bibliographies while editing"><option value="save">On save</option><option value="typing">After typing</option></select><label id="md-options" hidden><input type="checkbox" id="md-diagrams"> Mermaid</label><span id="pvstate" class="kind"></span><span id="pvbad" hidden title="The last compile failed: the preview is stale">error</span><span class="spacer"></span><button id="pv-reload" title="Reload the preview" aria-label="Reload the preview">↻</button><button id="pv-pdf" title="typst compile to out/ (the same path, .pdf)">Export PDF</button></div>
+    <div id="pvbody"><div id="pverr" role="alert" hidden><b>Not compiling.</b> <span id="pverr-what"></span><div id="pverr-list"></div></div><iframe id="mdframe" title="Markdown preview" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" hidden></iframe><iframe id="pvframe" title="Typst preview"></iframe><div id="pvmsg">Open a .typ file to preview it.</div></div>
   </section>
   <section id="sidepane" hidden>
     <div id="skillpane" hidden aria-label="Skillset">
@@ -1344,6 +1345,7 @@ async function loadTree() {
   document.title = 'Write — ' + d.root; S.rootPath = d.rootPath;
   renderTree();
   await checkOpenFile();
+  pvSendBuffer();  // a disk change the editor took in (or a file no longer open) reaches the preview
   renderDetail();
   renderMarks(); for (const st of S.msec.values()) if (st.ta) sectionMarks(st);
   updateFbHeader(); renderQueue();
@@ -2162,7 +2164,7 @@ async function save(force = false) {
     const r = await api('PUT', '/api/file', { path: S.file.path, content, base_hash: S.file.hash, force });
     S.file.hash = r.hash; S.file.original = content;
     if (S.file.plot && S.plotDoc) S.plotDoc = { ...S.plotDoc, hash: r.hash, content };
-    hideBanner(); updateFileState(); toast('Saved');
+    hideBanner(); updateFileState(); pvSendBuffer(); toast('Saved');
     poll();
   } catch (e) {
     if (e.status === 409) showConflict(e.data.disk ? { type: 'changed', disk: e.data.disk } : { type: 'deleted' });
@@ -3169,6 +3171,7 @@ function setTheme(name) {  // the workbench decides (postMessage); alone, the ?t
   const t = THEMES.includes(name) ? name : 'system';
   document.documentElement.dataset.theme = t;
   for (const P of T.list) P.term.options.theme = termTheme();
+  if (typeof W !== 'undefined' && W) mdSend();
 }
 window.addEventListener('message', e => {
   if (e.source !== window.parent || !e.data) return;
@@ -3439,24 +3442,24 @@ function setPane(name, on) {
   b.setAttribute('aria-pressed', String(on));
   b.firstChild.textContent = PANE_LABEL[name][on ? 1 : 0];
   postPanes();
-  $('#previewpane').hidden = $('#dividerpv').hidden = !(W.panes.preview && typOpen());
+  $('#previewpane').hidden = $('#dividerpv').hidden = !(W.panes.preview && previewOpen());
   $('#skillpane').hidden = !W.panes.skills;
   $('#queuepane').hidden = !W.panes.queue;
   $('#sidepane').hidden = !W.panes.skills && !W.panes.queue;
-  if (name === 'preview' && on && typOpen()) syncPreview();
+  if (name === 'preview' && on && previewOpen()) syncPreview();
   if (name === 'skills' && on) loadSkills();
   if (name === 'queue' && on) loadQueue();
   requestAnimationFrame(() => { syncHL(); renderMarks(); T.list.forEach(termFit); });
 }
 // The preview pane shows only while a .typ file is open. Preview / Hide preview is the preference,
 // kept across files; tinymist keeps running, so coming back to a .typ file is instant.
-function typOpen() {
-  if (S.multi.size > 1 || !/\.typ$/.test(S.sel || '')) return false;
+function previewOpen() {
+  if (S.multi.size > 1 || !/\.(typ|md|markdown)$/i.test(S.sel || '')) return false;
   const n = S.byPath.get(S.sel);
   return n ? n.type === 'file' : !!S.file && S.file.path === S.sel;
 }
 function pvShow() {
-  const typ = typOpen(), show = W.panes.preview && typ;
+  const typ = previewOpen(), show = W.panes.preview && typ;
   $('#pt-preview').hidden = !typ;
   if ($('#previewpane').hidden === !show) return;
   $('#previewpane').hidden = $('#dividerpv').hidden = !show;
@@ -3496,18 +3499,31 @@ function pvMsg(text, err) { const m = $('#pvmsg'); m.hidden = false; m.textConte
 function pvLive(ws) { return !!ws && (ws.readyState === 0 || ws.readyState === 1); }
 async function syncPreview() {
   if (!W.panes.preview) return;
+  const markdown = S.file && /\.(md|markdown)$/i.test(S.file.path);
+  $('#mdframe').hidden = !markdown; $('#pvframe').hidden = !!markdown;
+  $('#pv-refresh-mode').hidden = !!markdown;
+  $('#md-options').hidden = !markdown; $('#pv-pdf').hidden = !!markdown;
+  $('#pvengine').textContent = markdown ? 'Markdown' : 'tinymist';
+  if (markdown) { W.pv.pending = null; pvError(false); pvSendBuffer(); return; }
   if (!CFG.tinymist) return pvMsg('tinymist is not installed — `make deps` in the workbench checkout installs it (or set $TINYMIST).', true);
   const path = S.file && S.file.kind === 'text' && isTyp(S.file.path) ? S.file.path : W.pv.path;
   if (!path) return pvMsg('Open a .typ file to preview it.');
+  // syncChrome and the file loader can both ask while the same server is starting.
+  if (W.pv.pending && W.pv.pending.path === path) return;
   // A dead control socket cannot be reopened: tinymist drops that listener. Start a new process.
   const restart = path === W.pv.path && W.pv.data && !pvLive(W.pv.ws);
-  if (path === W.pv.path && W.pv.data && !restart) { $('#pvmsg').hidden = true; return; }
+  if (path === W.pv.path && W.pv.data && !restart) { $('#pvmsg').hidden = true; pvSendBuffer(); return; }
   W.pv.path = path; W.pv.data = null; W.pv.good = false; pvError(false);
   $('#pvstate').textContent = path; pvMsg('Starting tinymist…');
+  const request = W.pv.pending = { path };
   let r;
   try { r = await api('GET', '/api/preview?path=' + encodeURIComponent(path) + (restart ? '&restart=1' : '')); }
-  catch (e) { W.pv.path = null; return pvMsg(e.message, true); }
-  if (W.pv.path !== path) return;  // another file was opened meanwhile
+  catch (e) {
+    if (W.pv.pending !== request) return;
+    W.pv.pending = null; W.pv.path = null; return pvMsg(e.message, true);
+  }
+  if (W.pv.pending !== request) return;  // includes switching A → B → A while A starts
+  W.pv.pending = null;
   W.pv.data = r.data; W.pv.control = r.control;
   $('#pvframe').src = r.data; $('#pvmsg').hidden = true;
   pvConnect();
@@ -3520,6 +3536,7 @@ function pvConnect() {
   const held = W.pv.hold[url];
   if (pvLive(held)) { W.pv.ws = held; if (held.readyState === 1) pvSendBuffer(); return; }
   const ws = new WebSocket(url);
+  ws.path = W.pv.path;  // one process per file: the file this socket's memory copy belongs to
   W.pv.hold[url] = ws;
   W.pv.ws = ws;
   ws.onopen = () => { if (W.pv.ws === ws) pvSendBuffer(); };
@@ -3527,12 +3544,18 @@ function pvConnect() {
     if (W.pv.ws !== ws) return;
     let m; try { m = JSON.parse(ev.data); } catch { return; }
     if (m.event === 'syncEditorChanges') {  // tinymist asks for the unsaved text
-      if (S.file && S.file.path === W.pv.path)
-        ws.send(JSON.stringify({ event: 'syncMemoryFiles', files: { [absPath(S.file.path)]: docText() } }));
+      if ($('#pv-refresh-mode').value === 'save') {
+        ws.send(JSON.stringify({ event: 'syncMemoryFiles', files: {} })); return;
+      }
+      if (S.file && S.file.path === ws.path) {
+        ws.sent = docText();
+        ws.send(JSON.stringify({ event: 'syncMemoryFiles', files: { [absPath(ws.path)]: ws.sent } }));
+      }
       return;
     }
     if (m.event === 'compileStatus') {
       $('#pvstate').textContent = W.pv.path + (m.kind === 'Compiling' ? ' · …' : '');
+      if (m.kind === 'CompileError' || m.kind === 'CompileSuccess') pvCompileDone(ws);
       if (m.kind === 'CompileError') pvError(true);
       else if (m.kind === 'CompileSuccess') { W.pv.good = true; pvError(false); }
       return;
@@ -3587,21 +3610,80 @@ function pvRefreshFrame() {  // ask the preview page to take the latest render, 
   }
   frame.src = data;
 }
-function pvSendBuffer() {  // the unsaved text, so the preview follows typing
+// Once sent, tinymist compiles the memory copy and ignores that file on disk until it is removed.
+// So the editor's text goes over whenever it differs from what was sent (typing, a reload or merge
+// of a disk change), and the copy is removed once the file is not open, so the disk counts again.
+function pvSendBuffer(force) {
+  if (!W.panes.preview || document.hidden) return;
+  // Polls and file refreshes must also respect the typing pause.
+  if (!force && W.pv.sendT) return;
+  if (S.file && /\.(md|markdown)$/i.test(S.file.path)) mdSend();
   const ws = W.pv.ws;
-  if (!ws || ws.readyState !== 1 || !S.file || S.file.path !== W.pv.path) return;
-  ws.send(JSON.stringify({ event: 'updateMemoryFiles', files: { [absPath(S.file.path)]: docText() } }));
+  if (!ws || ws.readyState !== 1) return;
+  if (!force && $('#pv-refresh-mode').value === 'save') {
+    W.pv.dirty = false;
+    if (ws.sent != null) { ws.send(JSON.stringify({ event: 'removeMemoryFiles', files: [absPath(ws.path)] })); ws.sent = null; }
+    return;
+  }
+  if (S.file && S.file.kind === 'text' && S.file.path === ws.path) {
+    const text = docText();
+    if (!force && text === ws.sent) return;
+    if (ws.compiling || ws.bufferedAmount > 0) { W.pv.dirty = true; return; }
+    ws.compiling = true; W.pv.dirty = false;
+    ws.send(JSON.stringify({ event: 'updateMemoryFiles', files: { [absPath(ws.path)]: text } }));
+    ws.sent = text;
+  } else if (force || ws.sent != null) {
+    ws.send(JSON.stringify({ event: 'removeMemoryFiles', files: [absPath(ws.path)] }));
+    ws.sent = null;
+  }
 }
 function pvScroll() {
   const ws = W.pv.ws;
-  if (!ws || ws.readyState !== 1 || !S.file || S.file.path !== W.pv.path) return;
+  if (!W.panes.preview || document.hidden || W.pv.sendT || !ws || ws.compiling || ws.readyState !== 1 || !S.file || S.file.path !== W.pv.path) return;
   const v = docText().slice(0, viewToModel(editor.selectionStart));
   ws.send(JSON.stringify({ event: 'panelScrollTo', filepath: absPath(S.file.path), line: v.split('\n').length - 1, character: v.length - v.lastIndexOf('\n') - 1 }));
 }
-editor.addEventListener('input', () => { clearTimeout(W.pv.sendT); W.pv.sendT = setTimeout(pvSendBuffer, 200); });
+function mdSend() {
+  if (!W.panes.preview || !S.file || !/\.(md|markdown)$/i.test(S.file.path)) return;
+  const frame = $('#mdframe');
+  if (!frame.getAttribute('src')) { frame.src = '/vendor/markdown-preview.html'; return; }
+  const cs = getComputedStyle(document.documentElement);
+  frame.contentWindow.postMessage({ type: 'markdown-render', text: docText(), path: S.file.path,
+    diagrams: $('#md-diagrams').checked, dark: cs.colorScheme === 'dark',
+    colours: Object.fromEntries(['bg', 'panel', 'text', 'dim', 'line', 'accent'].map(k => [k, cs.getPropertyValue('--' + k).trim()])) }, '*');
+  $('#pvstate').textContent = S.file.path; $('#pvmsg').hidden = true;
+}
+$('#md-diagrams').checked = load('markdown.diagrams', false);
+$('#md-diagrams').onchange = () => { store('markdown.diagrams', $('#md-diagrams').checked); mdSend(); };
+window.addEventListener('message', e => {
+  if (e.source !== $('#mdframe').contentWindow || !e.data) return;
+  if (e.data.type === 'markdown-ready') mdSend();
+  if (e.data.type === 'markdown-open' && typeof e.data.path === 'string' && S.byPath.has(e.data.path)) {
+    expandTo(e.data.path); renderTree(); select(e.data.path);
+  }
+});
+function pvCompileDone(ws) {
+  ws.compiling = false;
+  if (W.pv.ws === ws && W.pv.dirty && !W.pv.sendT) pvScheduleBuffer();
+}
+$('#pv-refresh-mode').value = load('preview.refresh', 'save');
+$('#pv-refresh-mode').onchange = () => {
+  store('preview.refresh', $('#pv-refresh-mode').value);
+  clearTimeout(W.pv.sendT); W.pv.sendT = null; W.pv.dirty = false; pvSendBuffer();
+};
+function pvScheduleBuffer() {
+  clearTimeout(W.pv.sendT); W.pv.sendT = null;
+  if (!W.panes.preview || document.hidden) return;
+  if (S.file && /\.typ$/i.test(S.file.path) && $('#pv-refresh-mode').value === 'save') return;
+  // Compilation and iframe painting compete with editing. Wait for a pause,
+  // and keep only the latest buffer if tinymist is still compiling.
+  W.pv.sendT = setTimeout(() => { W.pv.sendT = null; pvSendBuffer(); }, 400);
+}
+editor.addEventListener('input', pvScheduleBuffer);
 ['keyup', 'click'].forEach(ev => editor.addEventListener(ev, () => { clearTimeout(W.pv.scrollT); W.pv.scrollT = setTimeout(pvScroll, 250); }));
 $('#pv-reload').onclick = () => {
-  if (W.pv.data && pvLive(W.pv.ws)) { pvSendBuffer(); pvRefreshFrame(); return; }
+  if (S.file && /\.(md|markdown)$/i.test(S.file.path)) { mdSend(); return; }
+  if (W.pv.data && pvLive(W.pv.ws)) { pvSendBuffer(true); pvRefreshFrame(); return; }
   syncPreview();
 };
 $('#pv-pdf').onclick = async () => {
@@ -3894,7 +3976,8 @@ loadSources();
 loadGit(); setInterval(() => { if (!document.hidden) loadGit(); }, 4000);
 loadTree().then(() => {
   const h = decodeURIComponent(location.hash.slice(1));
-  if (h && S.byPath.has(h)) { expandTo(h); renderTree(); select(h); }
+  const start = h || (S.byPath.has('README.md') ? 'README.md' : S.byPath.has('main.typ') ? 'main.typ' : '');
+  if (start && S.byPath.has(start)) { expandTo(start); renderTree(); select(start); }
 }).catch(e => { setLive('off'); toast('Could not load tree: ' + e.message, true); });
 </script>
 </body>
