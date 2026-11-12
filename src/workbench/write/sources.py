@@ -620,7 +620,42 @@ def _uuid_from(stdout: str) -> str:
     return ""
 
 
-def _render_pdfs(did_dir: Path, mode: str, docs: list[Path]) -> list[Path]:
+def _pair_docs(docs: list[Path], pdfs: list[Path]) -> list[tuple[Path, Path]]:
+    """Pair each source document with the PDF did rendered from it, by name.
+
+    did names every rendered file after the document it came from, so the stem is the
+    identity the two lists share; sort position is not (a document that renders no PDF
+    shifts every later pair, and one document's content would be written over another's
+    evid document). Anything that does not pair one-to-one is a hard error: a silent
+    mismatch in a legal case attaches evidence to the wrong exhibit.
+    """
+    by_stem: dict[str, list[Path]] = {}
+    for pdf in pdfs:
+        by_stem.setdefault(pdf.stem, []).append(pdf)
+    pairs: list[tuple[Path, Path]] = []
+    problems: list[str] = []
+    seen: dict[str, Path] = {}
+    for doc in docs:
+        if doc.stem in seen:
+            problems.append(f"{doc.name!r} and {seen[doc.stem].name!r} share the name {doc.stem!r}")
+            continue
+        seen[doc.stem] = doc
+        got = by_stem.get(doc.stem) or []
+        if not got:
+            problems.append(f"no PDF was rendered for {doc.name!r}")
+        elif len(got) > 1:
+            problems.append(f"{len(got)} PDFs are named after {doc.name!r}")
+        else:
+            pairs.append((doc, got.pop()))
+    for pdf in sorted(p for rest in by_stem.values() for p in rest):
+        problems.append(f"{pdf.name!r} matches no source document")
+    if problems:
+        raise PullError("the did handoff is not one PDF per document: " + "; ".join(problems))
+    return pairs
+
+
+def _render_pdfs(did_dir: Path, mode: str, docs: list[Path]) -> list[tuple[Path, Path]]:
+    """Render DOCS with did and return ``(source document, rendered PDF)`` pairs."""
     if not docs:
         raise PullError(f"no documents in {did_dir.name}")
     out = did_dir / "handoff" / "workbench"
@@ -653,7 +688,7 @@ def _render_pdfs(did_dir: Path, mode: str, docs: list[Path]) -> list[Path]:
     pdfs = sorted(p for p in pdf_dir.glob("*.pdf") if p.is_file()) if pdf_dir.is_dir() else []
     if not pdfs:
         raise PullError("did produced no PDF")
-    return pdfs
+    return _pair_docs(docs, pdfs)
 
 
 def _ensure_anon_set(db: Path, slug: str) -> None:
@@ -726,7 +761,7 @@ def pull(workdir: Path, slug: str, did: Did) -> dict:
         (Path(p) for p in proj.get("documents") or [] if Path(p).is_file()),
         key=lambda p: (p.name, str(p)),
     )
-    pdfs = _render_pdfs(did_dir, mode, docs)
+    pairs = _render_pdfs(did_dir, mode, docs)
     db = workdir / "evid"
     _ensure_anon_set(db, slug)
     state = read_pull_state(workdir)
@@ -734,14 +769,8 @@ def pull(workdir: Path, slug: str, did: Did) -> dict:
     prev_uuids = prev.get("uuids") or {}
     uuids: dict[str, str] = {}
     added = replaced = 0
-    pairs = list(zip(docs, pdfs, strict=False))
-    if len(docs) != len(pdfs):
-        pairs = [(None, pdf) for pdf in pdfs]
-    for index, (src, pdf) in enumerate(pairs):
-        if src is not None:
-            key = hashlib.sha256(str(src.resolve()).encode()).hexdigest()[:16]
-        else:
-            key = f"pdf-{index}"
+    for src, pdf in pairs:  # one PDF per document, paired by name (:func:`_pair_docs`)
+        key = hashlib.sha256(str(src.resolve()).encode()).hexdigest()[:16]
         uuid = str(prev_uuids.get(key) or "")
         if uuid:
             _replace_doc(db, did_dir, slug, uuid, pdf)
@@ -753,7 +782,8 @@ def pull(workdir: Path, slug: str, did: Did) -> dict:
     snap = set_snapshot(did_dir, [str(p) for p in docs])
     state[slug] = {"mode": mode, "docs": snap["docs"], "keys": snap["keys"], "uuids": uuids}
     write_pull_state(workdir, state)
-    return {"set": slug, "mode": mode, "added": added, "replaced": replaced, "pdfs": [p.name for p in pdfs]}
+    return {"set": slug, "mode": mode, "added": added, "replaced": replaced,
+            "pdfs": [pdf.name for _src, pdf in pairs]}
 
 
 def pull_linked(workdir: Path, did: Did) -> dict:

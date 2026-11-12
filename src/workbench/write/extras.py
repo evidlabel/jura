@@ -127,11 +127,14 @@ class Extras:
         return {"argv": prefix, "sandboxed": bool(prefix)}
 
     def _wrap(self, chdir: bool):
+        """The bwrap prefix for one terminal. Raises ``sandbox.StoreUnavailable`` when the
+        evid store cannot be located: the terminal then refuses to start rather than run
+        with every global set visible."""
         env = {**self.base_env}
         if not self.sandboxed:
             return [], env
         sel = sources.read_selection(self.root)
-        evid_data = self.evid.data_dir()
+        store = sandbox.evid_store(self.evid.data_dir())  # raises when the store cannot be found
         also: list[Path] = []
         try:
             for proj in self.did.projects():
@@ -141,13 +144,13 @@ class Extras:
             pass
         prefix = sandbox.bwrap_argv(
             self.root,
-            evid_data,
+            store,
             sources.global_slugs(sel),
             skills=skills.enabled_dirs(self.root),
             also=also,
             chdir=chdir,
         )
-        return prefix, sandbox.sandbox_env(env, evid_data)
+        return prefix, sandbox.sandbox_env(env, store)
 
     def cfg(self) -> dict:
         return {
@@ -178,7 +181,13 @@ class Extras:
             # What a terminal of this case starts under, for the Datasets tab's Agent pane
             # (evid asks the shell, the shell asks the open case's Write child). No --chdir:
             # evid's terminal keeps its own folder (the set).
-            h.send_json(200, self.sandbox_argv())
+            try:
+                body = self.sandbox_argv()
+            except sandbox.StoreUnavailable as e:
+                # Fail closed: no prefix is never a prefix without the evid walls.
+                h.send_json(503, {"argv": [], "sandboxed": False, "error": str(e)})
+                return True
+            h.send_json(200, body)
             return True
         if method == "GET" and path in ("/api/pdf", "/api/pdf/info"):
             # Render a PDF page to an image: the app webview has no PDF viewer.

@@ -1,6 +1,7 @@
 """What the workbench adds to the Write tab: sources, skills, queue, auto-git, sandbox, routes."""
 
 import base64
+import hashlib
 import json
 import os
 import shutil
@@ -360,6 +361,114 @@ def test_pull_keeps_pdf_flag_after_anon(case, tmp_path, monkeypatch):
     result = sources.pull(case, "interview", did)
     assert result["added"] == 1
     assert "anon --pdf --render placeholder" in log.read_text()
+
+
+def _fake_evid_named_after_pdf(tmp_path):
+    """An evid stub whose uuid is the PDF's stem, so a pull's pairing is visible on disk."""
+    evidbin = tmp_path / "evidbin"
+    evidbin.write_text(
+        "#!/usr/bin/env python3\n"
+        "import sys, json, shutil\nfrom pathlib import Path\n"
+        "args = sys.argv[1:]\n"
+        "if 'add' in args:\n"
+        "    db = Path(args[args.index('--db') + 1])\n"
+        "    slug = args[args.index('-s') + 1]\n"
+        "    src = Path(args[args.index('add') + 1])\n"
+        "    dest = db / 'anon' / f'anon_set_{slug}' / 'docs' / src.stem\n"
+        "    dest.mkdir(parents=True, exist_ok=True)\n"
+        "    shutil.copy(src, dest / 'original.pdf')\n"
+        "    print(json.dumps({'uuid': src.stem}))\n"
+    )
+    evidbin.chmod(0o755)
+    return evidbin
+
+
+def test_pull_pairs_each_pdf_with_its_own_document(case, tmp_path, monkeypatch):
+    """did's output order is not the input order: a PDF still carries its own document's key.
+
+    Pairing by sort position would have written alfa.pdf's render over beta's evid document.
+    """
+    folder = tmp_path / "interview"
+    (folder / "draft").mkdir(parents=True)
+    docs = [folder / "alfa.pdf", folder / "beta.pdf"]
+    for doc in docs:
+        doc.write_bytes(b"%PDF-" + doc.name.encode())
+    sources.choose(case, "did", "interview", True)
+    didbin = tmp_path / "didbin"
+    didbin.write_text(
+        "#!/usr/bin/env python3\n"
+        "import sys\nfrom pathlib import Path\n"
+        "args = sys.argv[1:]\n"
+        "out = Path(args[args.index('-o') + 1])\n"
+        "(out / 'pdf').mkdir(parents=True)\n"
+        "for name in ('beta.pdf', 'alfa.pdf'):\n"
+        "    (out / 'pdf' / name).write_bytes(b'%PDF-' + name.encode())\n"
+    )
+    didbin.chmod(0o755)
+    monkeypatch.setenv("WORKBENCH_DID_BIN", str(didbin))
+    monkeypatch.setenv("WORKBENCH_EVID_BIN", str(_fake_evid_named_after_pdf(tmp_path)))
+
+    result = sources.pull(case, "interview", FakeDid([_proj(folder, docs)]))
+
+    assert result["added"] == 2
+    for doc in docs:
+        got = case / "evid" / "anon" / "anon_set_interview" / "docs" / doc.stem / "original.pdf"
+        assert got.read_bytes() == b"%PDF-" + doc.name.encode()
+    uuids = sources.read_pull_state(case)["interview"]["uuids"]
+    keys = {hashlib.sha256(str(doc.resolve()).encode()).hexdigest()[:16]: doc.stem for doc in docs}
+    assert uuids == keys
+
+
+def test_pull_refuses_a_handoff_with_an_unpaired_document(case, tmp_path, monkeypatch):
+    """One document that renders no PDF must fail loudly, not shift every later pair."""
+    folder = tmp_path / "interview"
+    (folder / "draft").mkdir(parents=True)
+    docs = [folder / "alfa.pdf", folder / "beta.pdf"]
+    for doc in docs:
+        doc.write_bytes(b"%PDF-" + doc.name.encode())
+    sources.choose(case, "did", "interview", True)
+    didbin = tmp_path / "didbin"
+    didbin.write_text(
+        "#!/usr/bin/env python3\n"
+        "import sys\nfrom pathlib import Path\n"
+        "args = sys.argv[1:]\n"
+        "out = Path(args[args.index('-o') + 1])\n"
+        "(out / 'pdf').mkdir(parents=True)\n"
+        "(out / 'pdf' / 'beta.pdf').write_bytes(b'%PDF-beta.pdf')\n"
+    )
+    didbin.chmod(0o755)
+    monkeypatch.setenv("WORKBENCH_DID_BIN", str(didbin))
+    monkeypatch.setenv("WORKBENCH_EVID_BIN", str(_fake_evid_named_after_pdf(tmp_path)))
+
+    with pytest.raises(sources.PullError, match="no PDF was rendered for 'alfa.pdf'"):
+        sources.pull(case, "interview", FakeDid([_proj(folder, docs)]))
+    assert not (case / "evid" / "anon" / "anon_set_interview").exists()  # nothing was written
+    assert sources.read_pull_state(case) == {}
+
+
+def test_pull_refuses_a_pdf_that_belongs_to_no_document(case, tmp_path, monkeypatch):
+    """A stray render (did wrote a file no document produced) is an unpaired item too."""
+    folder = tmp_path / "interview"
+    (folder / "draft").mkdir(parents=True)
+    doc = folder / "alfa.pdf"
+    doc.write_bytes(b"%PDF-alfa")
+    sources.choose(case, "did", "interview", True)
+    didbin = tmp_path / "didbin"
+    didbin.write_text(
+        "#!/usr/bin/env python3\n"
+        "import sys\nfrom pathlib import Path\n"
+        "args = sys.argv[1:]\n"
+        "out = Path(args[args.index('-o') + 1])\n"
+        "(out / 'pdf').mkdir(parents=True)\n"
+        "(out / 'pdf' / 'alfa.pdf').write_bytes(b'%PDF-alfa')\n"
+        "(out / 'pdf' / 'stray.pdf').write_bytes(b'%PDF-stray')\n"
+    )
+    didbin.chmod(0o755)
+    monkeypatch.setenv("WORKBENCH_DID_BIN", str(didbin))
+    monkeypatch.setenv("WORKBENCH_EVID_BIN", str(_fake_evid_named_after_pdf(tmp_path)))
+
+    with pytest.raises(sources.PullError, match="'stray.pdf' matches no source document"):
+        sources.pull(case, "interview", FakeDid([_proj(folder, [doc])]))
 
 
 def test_an_unscanned_set_is_detected_not_passed_through(tmp_path):
@@ -739,6 +848,43 @@ def test_bwrap_argv(tmp_path, monkeypatch):
     assert f"--tmpfs {home / 'did' / 'already'}" not in joined  # already inside the hidden did root
 
 
+def test_sandbox_fails_closed_when_the_evid_store_is_unknown(case, tmp_path, monkeypatch):
+    """An unreachable evid with no local db refuses the terminal instead of showing every set.
+
+    ``data_dir()`` returns None when evid is down or still starting; skipping the binds then
+    left the whole global store readable under ``--dev-bind / /``.
+    """
+    from workbench.write import core
+    from workbench.write.extras import Extras
+
+    monkeypatch.delenv("WORKBENCH_EVID_DB", raising=False)
+    with pytest.raises(sandbox.StoreUnavailable, match="WORKBENCH_EVID_DB"):
+        sandbox.bwrap_argv(case)
+
+    ex = Extras(core._ws(str(case), "", [], False), {})
+    ex.sandboxed = True
+    ex.evid = FakeEvid(None)  # evid is up but does not answer /api/config
+    ex.did = FakeDid(None)
+    with pytest.raises(sandbox.StoreUnavailable):
+        ex.wrap()
+
+    # ...but $WORKBENCH_EVID_DB names the dir this workbench started evid on: that is enough
+    store = tmp_path / "evid-store"
+    (store / "anon" / "anon_set_linked").mkdir(parents=True)
+    (store / "anon" / "anon_set_other-matter").mkdir(parents=True)
+    (case / "workbench.yml").write_text(
+        'id: "2026-014"\nname: "Tenancy dispute"\nevid_set: "2026-014-anon"\n\n'
+        "evid:\n  global:\n    - linked\n  local: []\n"
+    )
+    monkeypatch.setenv("WORKBENCH_EVID_DB", str(store))
+    prefix, env = ex.wrap()
+    joined = " ".join(prefix)
+    assert f"--tmpfs {(store / 'anon').resolve()}" in joined
+    assert f"--ro-bind {(store / 'anon' / 'anon_set_linked').resolve()}" in joined
+    assert "other-matter" not in joined
+    assert env["EVID_DB"] == str(store)
+
+
 @pytest.mark.skipif(not sandbox.enabled(), reason="bubblewrap not available")
 def test_sandbox_is_your_terminal_minus_the_case_data(tmp_path):
     """Live: home, tools and config are there; did, the raw folder and other cases are not."""
@@ -753,7 +899,7 @@ def test_sandbox_is_your_terminal_minus_the_case_data(tmp_path):
     case = cases_root / "c"
     case.mkdir(parents=True)
     (cases_root / "other").mkdir()
-    a = sandbox.bwrap_argv(case, did_root=did_root, cases_root=cases_root)
+    a = sandbox.bwrap_argv(case, tmp_path / "evid", did_root=did_root, cases_root=cases_root)
     script = (
         f'ls "{did_root}" | wc -l; ls "{raw}" | wc -l; ls "{cases_root}"; '
         f'[ -d "{home}" ] && echo home; touch "{case}/w" && echo writable; command -v git >/dev/null && echo git'

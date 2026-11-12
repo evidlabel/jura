@@ -9,7 +9,8 @@ case's personal data:
 - a did set whose project folder sits outside that directory, and the folders of its source files;
 - the raw source files did has seen (each did project's ``draft/sources.json``): their
   folders are hidden, or the file itself when it sits directly in $HOME;
-- evid sets the case did not link in ``workbench.yml`` (the global evid store shows only those);
+- evid sets the case did not link in ``workbench.yml`` (the global evid store shows only those;
+  when its data dir cannot be found the sandbox refuses to start rather than show them all);
 - the other cases' workdirs;
 - other projects' Claude Code transcripts, prompt history, file history and pastes (this
   case gets its own, kept in the workbench state dir);
@@ -31,8 +32,36 @@ from pathlib import Path
 from workbench import paths
 
 
+class StoreUnavailable(RuntimeError):
+    """The evid store's location is unknown, so its sets cannot be hidden.
+
+    Raised instead of building a sandbox that shows every evid set: a dependency that
+    does not answer must not widen what the case's terminal can read.
+    """
+
+
 def enabled() -> bool:
     return os.environ.get("WORKBENCH_SANDBOX", "1") != "0" and shutil.which("bwrap") is not None
+
+
+def evid_store(evid_data: Path | None = None) -> Path:
+    """The evid data dir to hide the unlinked sets inside.
+
+    What the running evid reports (``/api/config``); else the dir this workbench started
+    evid on (``$WORKBENCH_EVID_DB``, the same value ``server.py`` passes as ``--db``).
+    When neither is known the sandbox cannot place its binds, and :class:`StoreUnavailable`
+    is raised: starting unsandboxed would hand the terminal every set on the machine.
+    """
+    if evid_data is not None:
+        return Path(evid_data).expanduser()
+    local = os.environ.get("WORKBENCH_EVID_DB", "").strip()
+    if local:
+        return Path(local).expanduser()
+    raise StoreUnavailable(
+        "the evid store's data directory is unknown (evid did not answer and "
+        "WORKBENCH_EVID_DB is not set), so its other sets cannot be hidden; "
+        "the sandboxed terminal will not start"
+    )
 
 
 def _env_paths(name: str) -> list[Path]:
@@ -192,8 +221,9 @@ def bwrap_argv(
     for f in files:
         a += ["--ro-bind", "/dev/null", str(f)]
 
-    if evid_data is not None:  # the evid store shows only the listed sets
-        a += evid_set_binds(evid_data, evid_sets)
+    # Always: the store's other sets are hidden even when evid did not answer. evid_store
+    # raises rather than skipping these binds, so an unreachable evid cannot widen access.
+    a += evid_set_binds(evid_store(evid_data), evid_sets)
 
     if cases_root.is_dir() and case_dir.is_relative_to(cases_root.resolve()):  # no other case
         a += ["--tmpfs", str(cases_root.resolve())]
