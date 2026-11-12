@@ -38,7 +38,7 @@ from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 
 from . import __version__, cases, requires, templates
-from .supervisor import Child, Supervisor
+from .supervisor import Subprocess, Supervisor
 
 STATIC = resources.files(__package__) / "static"
 VENDOR = resources.files(__package__) / "write" / "vendor"
@@ -97,12 +97,12 @@ class Workbench:
         self.problems: list[str] | None = None  # tools missing or too old (requires.py); None until checked
 
     # ---------- children ----------
-    def write_child(self, case: cases.Case) -> Child:
+    def write_subprocess(self, case: cases.Case) -> Subprocess:
         def make():
             argv = [sys.executable, "-m", "workbench.write", "serve", str(case.workdir), "--port", "0"]
             if self.agent:
                 argv += ["--agent", self.agent]
-            return Child(
+            return Subprocess(
                 f"write:{case.id}",
                 argv,
                 env={
@@ -115,13 +115,13 @@ class Workbench:
 
         return self.sup.ensure(f"write:{case.id}", make)
 
-    def evid_child(self) -> Child:
+    def evid_subprocess(self) -> Subprocess:
         # The Datasets tab keeps evid's own Agent pane. evid serves every case, so the pane's
         # terminals cannot know the case sandbox: EVID_TERM_WRAP sends each one through
         # workbench.sandbox_exec, which asks this server for the current case's Write prefix.
         return self.sup.ensure(
             "evid",
-            lambda: Child(
+            lambda: Subprocess(
                 "evid",
                 [tool("evid"), *evid_db_args(), "gui", "--headless", "--replace", "-p", str(free_port(8790))],
                 env={
@@ -145,17 +145,17 @@ class Workbench:
             case = cases.get(cid)
         except KeyError:
             raise HTTPError(404, "no case is open") from None
-        child = self.write_child(case)
-        url = child.wait_url(timeout=60)
+        proc = self.write_subprocess(case)
+        url = proc.wait_url(timeout=60)
         if not url:
-            raise HTTPError(503, child.error or "the Write tab did not start")
+            raise HTTPError(503, proc.error or "the Write tab did not start")
         try:
             with urlopen(Request(url.rstrip("/") + "/api/sandbox"), timeout=60) as r:
                 return json.loads(r.read())
         except (OSError, ValueError) as e:
             raise HTTPError(503, f"the Write tab did not answer: {e}") from e
 
-    def did_child(self) -> Child:
+    def did_subprocess(self) -> Subprocess:
         root = cases.did_root()
         created = not root.exists()
         root.mkdir(parents=True, exist_ok=True)
@@ -165,7 +165,7 @@ class Workbench:
         db = evid_db_args()  # the same data dir as the evid GUI: did's handoff lands there too
         return self.sup.ensure(
             "did",
-            lambda: Child(
+            lambda: Subprocess(
                 "did",
                 [tool("did"), "gui", "--headless", "-p", str(free_port(8791))],
                 env={"EVID_DB": db[1]} if db else None,
@@ -182,7 +182,7 @@ class Workbench:
         case = cases.get(cid)
         with self.lock:
             self.current = case.id
-        self.write_child(case)
+        self.write_subprocess(case)
         self.connect_workdir(case)
         return self.state()
 
@@ -192,14 +192,14 @@ class Workbench:
         Other trunks stay. The same directory again is a no-op on the evid side.
         Nothing happens until evid is up: the first case is selected before evid starts.
         """
-        child = self.sup.get("evid")
-        if child is None or not child.url:
+        proc = self.sup.get("evid")
+        if proc is None or not proc.url:
             return
         path = case.workdir / "evid"
         try:
             path.mkdir(parents=True, exist_ok=True)
             req = Request(
-                child.url.rstrip("/") + "/api/roots",
+                proc.url.rstrip("/") + "/api/roots",
                 data=json.dumps({"path": str(path)}).encode(),
                 method="POST",
                 headers={"Content-Type": "application/json", "X-Evid": "1"},
@@ -378,20 +378,20 @@ class Handler(BaseHTTPRequestHandler):
         """The URL a tab's iframe should load, waiting (briefly) for its child to come up."""
         wb = self.wb
         if tab == "write":
-            child = wb.write_child(cases.get(cid))
+            proc = wb.write_subprocess(cases.get(cid))
         elif tab == "evid":
-            child = wb.evid_child()
+            proc = wb.evid_subprocess()
         elif tab == "did":
-            child = wb.did_child()
+            proc = wb.did_subprocess()
         else:
             raise HTTPError(400, f"no tab {tab!r}")
-        url = child.wait_url(timeout=60)
+        url = proc.wait_url(timeout=60)
         if tab == "evid" and url:
             case_id = cid or wb.current
             if case_id:
                 with contextlib.suppress(KeyError):
                     wb.connect_workdir(cases.get(case_id))
-        return {"tab": tab, "url": url, "error": child.error if not url else ""}
+        return {"tab": tab, "url": url, "error": proc.error if not url else ""}
 
 
 class Server(ThreadingHTTPServer):

@@ -14,7 +14,7 @@ from urllib.request import Request, urlopen
 import pytest
 
 from workbench import casefile, cases
-from workbench.supervisor import Child, Supervisor
+from workbench.supervisor import Subprocess, Supervisor
 
 
 @pytest.fixture(autouse=True)
@@ -101,31 +101,31 @@ def test_slug_folds_a_typed_id_to_ascii():
 FAKE = [sys.executable, "-c", "import time; print('x\\n  open http://127.0.0.1:1234/', flush=True); time.sleep(60)"]
 
 
-def test_child_reads_url_and_stops():
-    c = Child("fake", FAKE)
-    c.start()
-    assert c.wait_url(10) == "http://127.0.0.1:1234/"
-    assert c.as_json()["alive"]
-    c.stop()
-    assert not c.as_json()["alive"]
+def test_subprocess_reads_url_and_stops():
+    proc = Subprocess("fake", FAKE)
+    proc.start()
+    assert proc.wait_url(10) == "http://127.0.0.1:1234/"
+    assert proc.as_json()["alive"]
+    proc.stop()
+    assert not proc.as_json()["alive"]
 
 
-def test_child_restarts_after_crash():
+def test_subprocess_restarts_after_crash():
     crash = [sys.executable, "-c", "print('WRITE_URL http://127.0.0.1:9/', flush=True); raise SystemExit(3)"]
-    c = Child("crash", crash)
-    c.start()
-    assert c.wait_url(10) == "http://127.0.0.1:9/"
+    proc = Subprocess("crash", crash)
+    proc.start()
+    assert proc.wait_url(10) == "http://127.0.0.1:9/"
     deadline = time.time() + 10
-    while c.restarts == 0 and time.time() < deadline:
+    while proc.restarts == 0 and time.time() < deadline:
         time.sleep(0.05)
-    assert c.restarts >= 1 and "exited with code 3" in c.error
-    c.stop()
+    assert proc.restarts >= 1 and "exited with code 3" in proc.error
+    proc.stop()
 
 
-def test_child_started_from_a_short_thread_survives_it():
+def test_subprocess_started_from_a_short_thread_survives_it():
     """PR_SET_PDEATHSIG is per forking thread: children must not die with a request thread."""
     sup = Supervisor()
-    t = threading.Thread(target=lambda: sup.ensure("fake", lambda: Child("fake", FAKE)))
+    t = threading.Thread(target=lambda: sup.ensure("fake", lambda: Subprocess("fake", FAKE)))
     t.start()
     t.join()
     child = sup.get("fake")
@@ -135,20 +135,20 @@ def test_child_started_from_a_short_thread_survives_it():
     sup.stop()
 
 
-def test_child_reuses_a_raised_instance():
+def test_subprocess_reuses_a_raised_instance():
     raised = [sys.executable, "-c", "print('Raised the running evid GUI (http://127.0.0.1:8790/).', flush=True)"]
-    c = Child("evid", raised)
-    c.start()
-    assert c.wait_url(10) == "http://127.0.0.1:8790/" and c.external
-    c.proc.wait(5)
+    proc = Subprocess("evid", raised)
+    proc.start()
+    assert proc.wait_url(10) == "http://127.0.0.1:8790/" and proc.external
+    proc.proc.wait(5)
     time.sleep(0.3)
-    assert c.restarts == 0 and c.url == "http://127.0.0.1:8790/"
+    assert proc.restarts == 0 and proc.url == "http://127.0.0.1:8790/"
 
 
 def test_unknown_binary_reports_error():
-    c = Child("nope", ["/nonexistent/evid", "gui"])
-    c.start()
-    assert c.wait_url(5) is None and "cannot start" in c.error
+    proc = Subprocess("nope", ["/nonexistent/evid", "gui"])
+    proc.start()
+    assert proc.wait_url(5) is None and "cannot start" in proc.error
 
 
 # ---------- server ----------
@@ -239,7 +239,7 @@ def test_new_case_starts_write(shell):
     assert call(shell, "POST", "/api/case/select", {"id": "nope"})[0] == 404
 
 
-def test_sandbox_prefix_is_the_open_cases_write_child(shell, roots):
+def test_sandbox_prefix_is_the_open_cases_write_subprocess(shell, roots):
     call(shell, "POST", "/api/case/new", {"id": "2026-014", "name": "Tenancy dispute"})
     status, body = call(shell, "GET", "/api/sandbox")
     out = json.loads(body)
@@ -310,15 +310,15 @@ def test_evid_launch_replaces_a_running_gui(monkeypatch):
     monkeypatch.setattr(server, "free_port", lambda _start: 8790)
     captured = {}
 
-    class Fake(server.Child):
+    class Fake(server.Subprocess):
         def start(self):
             captured["argv"] = self.argv
             captured["env"] = self.env
 
-    monkeypatch.setattr(server, "Child", Fake)
+    monkeypatch.setattr(server, "Subprocess", Fake)
     wb = server.Workbench()
     wb.url = "http://127.0.0.1:8780/"
-    wb.evid_child()
+    wb.evid_subprocess()
     assert captured["argv"] == ["/bin/evid", "gui", "--headless", "--replace", "-p", "8790"]
     # the Datasets tab's Agent pane asks this window for the open case's sandbox
     assert captured["env"]["EVID_TERM_WRAP"].endswith("-m workbench.sandbox_exec")
@@ -360,9 +360,9 @@ def test_connect_workdir_posts_the_case_evid_dir(roots):
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     wb = Workbench()
     try:
-        child = Child("evid", ["true"])
-        child.url = f"http://127.0.0.1:{srv.server_port}/"
-        wb.sup.children["evid"] = child
+        proc = Subprocess("evid", ["true"])
+        proc.url = f"http://127.0.0.1:{srv.server_port}/"
+        wb.sup.subprocesses["evid"] = proc
         case = cases.create("c1", "C")
         wb.connect_workdir(case)
         assert seen["path"] == "/api/roots"
@@ -392,7 +392,7 @@ def test_select_and_the_evid_tab_ask_to_connect(roots, monkeypatch):
         def wait_url(self, timeout=60):
             return self.url
 
-    monkeypatch.setattr(wb, "evid_child", lambda: Up())
+    monkeypatch.setattr(wb, "evid_subprocess", lambda: Up())
     handler = Handler.__new__(Handler)
     handler.wb = wb
     assert Handler.tab_url(handler, "evid", case.id)["url"] == Up.url
@@ -405,7 +405,7 @@ def test_select_and_the_evid_tab_ask_to_connect(roots, monkeypatch):
         def wait_url(self, timeout=60):
             return None
 
-    monkeypatch.setattr(wb, "evid_child", lambda: Down())
+    monkeypatch.setattr(wb, "evid_subprocess", lambda: Down())
     assert Handler.tab_url(handler, "evid", case.id)["url"] is None
     assert seen == ["c1", "c1"]
     wb.stop()

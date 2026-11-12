@@ -1,4 +1,4 @@
-"""Child servers: each tab's app runs as its own process on a loopback port.
+"""Subprocess servers: each tab's app runs as its own process on a loopback port.
 
 A child prints its URL on stdout (``WRITE_URL <url>`` for Write, ``open <url>`` for evid and
 did). The supervisor reads that line, keeps the URL, echoes the child's stderr with a prefix,
@@ -17,7 +17,7 @@ import threading
 import time
 
 
-def _child_setup() -> None:
+def _subprocess_setup() -> None:
     """In the child, before exec: its own session (Ctrl+C in a terminal does not hit it), and
     SIGTERM when the workbench dies however it dies, so no server outlives the window."""
     os.setsid()
@@ -53,7 +53,7 @@ class _Spawner:
         box: dict = {}
         done = threading.Event()
         with self.cv:
-            self.jobs.append((_child_setup, kwargs, box, done))
+            self.jobs.append((_subprocess_setup, kwargs, box, done))
             self.cv.notify()
         done.wait()
         if "error" in box:
@@ -67,7 +67,7 @@ URL_RE = re.compile(r"(?:WRITE_URL|open)\s+(http://127\.0\.0\.1:\d+/)")
 RAISED_RE = re.compile(r"Raised the running .* GUI \((http://127\.0\.0\.1:\d+/)\)")
 
 
-class Child:
+class Subprocess:
     """One child server. ``url`` is None until it has printed one."""
 
     def __init__(self, name: str, argv: list[str], env: dict | None = None, cwd: str | None = None):
@@ -159,23 +159,23 @@ class Child:
 
 
 class Supervisor:
-    """All children, by key (``write:<case>``, ``evid``, ``did``)."""
+    """All subprocesses, by key (``write:<case>``, ``evid``, ``did``)."""
 
     def __init__(self) -> None:
-        self.children: dict[str, Child] = {}
+        self.subprocesses: dict[str, Subprocess] = {}
         self.lock = threading.Lock()
 
-    def ensure(self, key: str, make) -> Child:
+    def ensure(self, key: str, make) -> Subprocess:
         with self.lock:
-            child = self.children.get(key)
-            if child is None:
-                child = self.children[key] = make()
-        child.start()
-        return child
+            proc = self.subprocesses.get(key)
+            if proc is None:
+                proc = self.subprocesses[key] = make()
+        proc.start()
+        return proc
 
-    def get(self, key: str) -> Child | None:
-        return self.children.get(key)
+    def get(self, key: str) -> Subprocess | None:
+        return self.subprocesses.get(key)
 
     def stop(self) -> None:
-        for c in list(self.children.values()):
+        for c in list(self.subprocesses.values()):
             c.stop()
