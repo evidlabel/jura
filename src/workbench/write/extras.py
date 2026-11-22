@@ -7,6 +7,7 @@ Routes (all under the handler's guards: loopback Host, X-Treedit on writes):
     PUT  /api/sources             {pool, slug, on} or {slug, mode} — link a pill, or set a pull mode
     POST /api/sources/pull        {slug?} — hand off one connected did set, or every connected one, as PDFs
     POST /api/sources/gather      write one merged refs/refs.yml for the linked sets
+    GET  /api/refs                [{key, title, url}] from refs/refs.yml, for the editor's key completion
     POST /api/sources/quote       {slug, uuid, where} — evid doc quote on one document
     GET  /api/sources/docs        ?slug=&where= — documents in one linked set
     POST /api/sources/repair      {slug} — re-anchor a linked global anon set (evid's repair job)
@@ -203,6 +204,9 @@ class Extras:
             return True
         if method == "GET" and path == "/api/sources":
             h.send_json(200, sources.panel(root, self.evid, self.did))
+            return True
+        if method == "GET" and path == "/api/refs":
+            h.send_json(200, {"refs": sources.ref_keys(root)})
             return True
         if method == "PUT" and path == "/api/sources":
             b = h.body()

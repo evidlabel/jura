@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="/vendor/xterm.css">
 <script src="/vendor/xterm.js"></script>
 <script src="/vendor/addon-fit.js"></script>
+<script src="/vendor/codemirror.min.js"></script>
 <script>
 try {  // the workbench passes its theme (light / dark / evening / legal); alone, follow the system
   var themeQ = new URLSearchParams(location.search).get('theme');
@@ -184,8 +185,7 @@ section#detail{flex:1 1 0;min-width:440px;display:flex;flex-direction:column;pos
 #findn{color:var(--dim);min-width:64px;text-align:center}
 #findbar button{padding:1px 7px;font-size:12px}
 #findbar label{display:flex;gap:3px;align-items:center;color:var(--dim);cursor:pointer}
-#findhl{position:absolute;left:0;top:0;pointer-events:none}
-.found{position:absolute;background:color-mix(in srgb,#f5c518 45%,transparent);outline:1px solid #d4a400;border-radius:2px}
+.found{background:color-mix(in srgb,#f5c518 45%,transparent);outline:1px solid #d4a400;border-radius:2px}
 #ovr i.find{background:#e0b000}
 #empty{margin:auto;color:var(--dim);text-align:center;max-width:420px;padding:20px}
 #pane{flex:1;display:flex;flex-direction:column;min-height:0}
@@ -209,14 +209,28 @@ section#detail{flex:1 1 0;min-width:440px;display:flex;flex-direction:column;pos
 #ovr i.you{background:var(--accent)}
 .smarks{position:absolute;inset:0;pointer-events:none}
 #editwrap[hidden]{display:none}
-body.wrap #editor,body.wrap #hl,body.wrap .sedit textarea,body.wrap .sedit .shl{white-space:pre-wrap;overflow-wrap:anywhere}
-body.wrap #editor{overflow-x:hidden}
-#editor{flex:1;position:relative;border:0;resize:none;padding:12px 16px;font:calc(13.5px * var(--ez, 1) * var(--edit-scale))/1.55 var(--edit);background:transparent;color:var(--text);tab-size:4;outline:none;white-space:pre;overflow:auto}
-#hl{position:absolute;inset:0;margin:0;padding:12px 56px 56px 16px;font:calc(13.5px * var(--ez, 1) * var(--edit-scale))/1.55 var(--edit);tab-size:4;white-space:pre;overflow:hidden;pointer-events:none;color:var(--text)}
-#editwrap:not(.hl) #hl{display:none}
-#editwrap.hl #editor{color:transparent;caret-color:var(--text)}
-#editwrap.hl #editor::selection{color:transparent;background:color-mix(in srgb,var(--accent) 28%,transparent)}
-#hl.flash{animation:flash 1.2s ease-out}
+/* the editors are CodeMirror 6 (vendor/codemirror.min.js); the overlays above sit under its text */
+.cm-editor{background:transparent;color:var(--text);outline:none}
+.cm-editor.cm-focused{outline:none}
+.cm-editor .cm-scroller{font-family:var(--edit);line-height:1.55}
+.cm-editor .cm-content{caret-color:var(--text)}
+.cm-editor .cm-cursor,.cm-editor .cm-dropCursor{border-left-color:var(--text)}
+.cm-editor .cm-selectionBackground,.cm-editor.cm-focused .cm-selectionBackground,.cm-editor .cm-content ::selection{background:color-mix(in srgb,var(--accent) 28%,transparent) !important}
+.cm-editor.ro .cm-content{color:var(--dim)}
+.cm-editor .cm-foldPlaceholder{background:none;border:0;padding:0;margin:0;color:var(--dim);font-size:.85em;cursor:pointer}
+.cm-editor .cm-panels{background:var(--panel);color:var(--text);border-top:1px solid var(--line);font-family:var(--mono);font-size:12px}
+.cm-editor .cm-panels input{background:var(--bg);color:var(--text);font-family:var(--mono)}
+.cm-editor .cm-fat-cursor{background:color-mix(in srgb,var(--accent) 55%,transparent) !important;outline:none !important}
+.cm-editor:not(.cm-focused) .cm-fat-cursor{background:none !important;outline:1px solid var(--accent) !important}
+.cm-tooltip.cm-tooltip-autocomplete{background:var(--panel);color:var(--text);border:1px solid var(--line);font-family:var(--mono);font-size:12.5px}
+.cm-tooltip-autocomplete ul li[aria-selected]{background:var(--accent) !important;color:var(--bg) !important}
+.cm-tooltip-autocomplete .cm-completionDetail{color:var(--dim);font-style:normal;margin-left:10px}
+.cm-tooltip-autocomplete ul li[aria-selected] .cm-completionDetail{color:inherit}
+#editwrap .cm-editor{flex:1;min-width:0;height:100%}
+#editwrap .cm-scroller{font-size:calc(13.5px * var(--ez, 1) * var(--edit-scale))}
+#editwrap .cm-content{padding:12px 0 56px}
+#editwrap .cm-line{padding:0 16px}
+#editwrap .cm-editor.flash .cm-content{animation:flash 1.2s ease-out}
 #plotbar{display:flex;gap:8px;align-items:center;padding:4px 14px;border-bottom:1px solid var(--line);background:var(--panel);font-size:12px;color:var(--dim)}
 #plotbar[hidden]{display:none}
 #plotbar button{padding:1px 8px;font-size:12px}
@@ -294,14 +308,12 @@ body.wrap #editor{overflow-x:hidden}
 .mfile .mh:hover .name{color:var(--accent)}
 .sedit{position:relative;background:var(--bg)}
 .sedit.flash{animation:flash 1.2s ease-out}
-.sedit .shl{position:absolute;inset:0;margin:0;padding:10px 16px;font:calc(13px * var(--ez, 1) * var(--edit-scale))/1.5 var(--edit);white-space:pre;overflow:hidden;pointer-events:none;color:var(--text)}
-.sedit:not(.hl) .shl{display:none}
-.sedit textarea{position:relative;display:block;width:100%;margin:0;border:0;resize:none;padding:10px 16px;font:calc(13px * var(--ez, 1) * var(--edit-scale))/1.5 var(--edit);white-space:pre;overflow-x:auto;overflow-y:hidden;background:transparent;color:var(--text);outline:none}
-.sedit textarea:focus{box-shadow:inset 3px 0 0 var(--accent)}
+.sedit .cm-scroller{font-size:calc(13px * var(--ez, 1) * var(--edit-scale));line-height:1.5;overflow:visible}
+.sedit .cm-content{padding:10px 0}
+.sedit .cm-line{padding:0 16px}
+.sedit .cm-editor.cm-focused{box-shadow:inset 3px 0 0 var(--accent)}
 .unchars{padding:0 16px 8px;font:600 11px/1.4 var(--mono);color:var(--note);background:var(--bg)}
 .unchars:empty{display:none}
-.sedit.hl textarea{color:transparent;caret-color:var(--text)}
-.sedit.hl textarea::selection{color:transparent;background:color-mix(in srgb,var(--accent) 28%,transparent)}
 .mfile .mh button{padding:1px 8px;font-size:12px;font-family:var(--sans)}
 .mfile .mh button[hidden]{display:none}
 .mfile .mh.dirty .name::after{content:" ●";color:var(--note)}
@@ -323,7 +335,6 @@ body.wrap #editor{overflow-x:hidden}
 #orphans .d span.why{color:var(--dim);font-style:normal}
 .mfile .t-c{font-style:italic} .mfile .t-h{font-weight:600}
 .mfile .msg{padding:10px 16px;color:var(--dim);font-size:13px}
-#editor[readonly]{color:var(--dim)}
 #dirinfo{flex:1;overflow:auto;padding:12px 16px}
 #dirinfo[hidden]{display:none}
 #dirinfo .stats{color:var(--dim);margin-bottom:10px}
@@ -349,7 +360,7 @@ dialog::backdrop{background:rgba(0,0,0,.35)}
 html.focus #detail{z-index:26;background:var(--bg);box-shadow:0 0 0 1px var(--line),0 16px 48px rgba(0,0,0,.28)}
 html.focus #previewpane{z-index:26;background:var(--bg);box-shadow:0 0 0 1px var(--line),0 16px 48px rgba(0,0,0,.28)}
 html.focus #dividerpv{z-index:26}  /* keep the editor + preview one crisp block; Hide preview removes it */
-#b-focus[aria-pressed="true"]{background:var(--sel);border-color:var(--accent);color:var(--text)}
+#b-focus[aria-pressed="true"],#b-vim[aria-pressed="true"]{background:var(--sel);border-color:var(--accent);color:var(--text)}
 #toast.show{opacity:.95}
 #toast.err{background:var(--danger);color:#fff}
 
@@ -574,6 +585,7 @@ html.embed .ptoggles:has(#pt-preview[hidden]){display:none}  /* Preview is its o
         <button id="b-rename">Rename / move</button><button id="b-delete" class="danger">Delete</button>
       </div></details>
       <button id="b-focus" type="button" aria-pressed="false" title="Blur the rest of the window, keeping the editor. Esc leaves focus. Ctrl+\ toggles it.">Focus</button>
+      <button id="b-vim" type="button" aria-pressed="false" title="Vim keys in the editor (:w saves, :wa saves all). Off: ordinary keys.">Vim</button>
       <span class="ptoggles" role="group" aria-label="Panes">
         <button id="pt-preview" aria-pressed="false" title="Markdown or Typst preview beside the editor">Preview</button>
         <button id="pt-skills" aria-pressed="false" title="The skills this case's agents can load">Skillset</button>
@@ -595,7 +607,7 @@ html.embed .ptoggles:has(#pt-preview[hidden]){display:none}  /* Preview is its o
         <button id="plot-src" hidden title="Switch between the picture and the SVG source">Source</button>
       </div>
       <div id="plotview" hidden><div id="plotstage"></div></div>
-      <div id="editrow"><div id="editcol"><button type="button" id="foldbar" hidden title="Fold or show the Typst setup"></button><div id="editwrap"><div id="ovr"></div><div id="marks"></div><div id="findhl"></div><pre id="hl" aria-hidden="true"></pre><textarea id="editor" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea></div></div><div id="margin" hidden aria-label="Notes on lines"><div id="mstack"></div></div></div>
+      <div id="editrow"><div id="editcol"><button type="button" id="foldbar" hidden title="Fold or show the Typst setup"></button><div id="editwrap"><div id="ovr"></div><div id="marks"></div></div></div><div id="margin" hidden aria-label="Notes on lines"><div id="mstack"></div></div></div>
       <div id="dirinfo" hidden></div>
       <div class="status"><span id="pos"></span><span id="filestate"></span><span id="unsaved" hidden title="Characters added or removed since the last save"></span><span class="spacer"></span><button id="b-undo" title="Undo (Ctrl+Z)" disabled>↶</button><button id="b-redo" title="Redo (Ctrl+Shift+Z / Ctrl+Y)" disabled>↷</button><button id="save" class="primary">Save</button></div>
     </div>
@@ -655,7 +667,6 @@ const plog = msg => fetch('/api/log', { method: 'POST', headers: { 'X-Treedit': 
 window.addEventListener('error', e => plog(`${e.message} @ ${e.filename}:${e.lineno}`));
 window.addEventListener('unhandledrejection', e => plog('unhandled: ' + (e.reason && (e.reason.stack || e.reason))));
 const $ = s => document.querySelector(s);
-const editor = $('#editor'), hlEl = $('#hl');
 const load = (k, d) => { try { const v = JSON.parse(localStorage.getItem('treedit:' + k)); return v ?? d; } catch { return d; } };
 const store = (k, v) => { try { localStorage.setItem('treedit:' + k, JSON.stringify(v)); } catch {} };
 const noteKey = p => p || '.';
@@ -683,10 +694,210 @@ function btn(label, fn, cls) { const b = el('button', cls, label); b.onclick = f
 let toastT;
 function toast(msg, err) { const t = $('#toast'); t.textContent = msg; t.className = 'show' + (err ? ' err' : ''); clearTimeout(toastT); toastT = setTimeout(() => t.className = '', err ? 5000 : 1800); }
 
-/* ---------- Typst setup fold: the preamble is one line until it is opened ---------- */
-// The textarea keeps the document body. The preamble stays in Fold.prefix, so save, preview
-// and undo still see the whole file. Click the bar to open or fold it.
-const Fold = { collapsed: false, end: 0, prefix: '', path: '' };
+/* ---------- the editors: CodeMirror 6 (vendor/codemirror.min.js) behind a small textarea-like face ---------- */
+// The main editor and every stacked one is an Ed. When an editor leaves a file, its EditorState is
+// kept per path, so undo survives switching files and views. Disk reloads and merges are
+// transactions, so undo walks back through them to the version on disk.
+const CMX = window.CM;
+const EDS = new Set(), STATES = new Map(), STATES_MAX = 60;
+const EDC = { ro: new CMX.Compartment(), tab: new CMX.Compartment(), hl: new CMX.Compartment(), vim: new CMX.Compartment() };
+let VIM = !!load('vim', false), VIMX = null;
+const edOf = view => (view && view._ed) || null;
+const setFound = CMX.StateEffect.define();
+const foundMark = CMX.Decoration.mark({ class: 'found' });
+const foundField = CMX.StateField.define({  // the current find match
+  create: () => CMX.Decoration.none,
+  update(deco, tr) {
+    deco = deco.map(tr.changes);
+    for (const e of tr.effects) if (e.is(setFound)) deco = e.value ? CMX.Decoration.set([foundMark.range(e.value[0], e.value[1])]) : CMX.Decoration.none;
+    return deco;
+  },
+  provide: f => CMX.EditorView.decorations.from(f),
+});
+const HLMARK = {}, HLPLUG = {};
+function hlDecos(text, lang) {
+  if (!lang || text.length > HL_MAX) return CMX.Decoration.none;
+  const b = new CMX.RangeSetBuilder();
+  for (const [a, z, cls] of tokens(text, lang)) b.add(a, z, HLMARK[cls] || (HLMARK[cls] = CMX.Decoration.mark({ class: 't-' + cls })));
+  return b.finish();
+}
+function hlPlugin(lang) {  // the page's own highlighter (LANGS), as decorations
+  return HLPLUG[lang] || (HLPLUG[lang] = CMX.ViewPlugin.define(view => ({
+    decorations: hlDecos(view.state.doc.toString(), lang),
+    update(u) { if (u.docChanged) this.decorations = hlDecos(u.state.doc.toString(), lang); },
+  }), { decorations: p => p.decorations }));
+}
+const foldGuard = CMX.EditorState.changeFilter.of(tr => {  // typing never lands inside the folded setup
+  if (tr.isUserEvent('undo') || tr.isUserEvent('redo')) return true;
+  const r = [];
+  CMX.foldedRanges(tr.startState).between(0, tr.startState.doc.length, (a, b) => { r.push(a, b); });
+  return r.length ? r : true;
+});
+const edBridge = CMX.Prec.highest(CMX.EditorView.domEventHandlers({
+  keydown(e, view) {  // the page's own keys (find, comments, Enter, Tab) before CodeMirror's
+    const ed = edOf(view);
+    if (!ed) return false;
+    if (VIM && ed.vimMode !== 'insert' && !(e.ctrlKey || e.metaKey || e.altKey)) return false;  // vim's normal / visual keys
+    if (CMX.completionStatus(view.state) === 'active' && /^(Enter|Tab|Escape|ArrowUp|ArrowDown|PageUp|PageDown)$/.test(e.key)) return false;
+    ed.fire('keydown', e);
+    return e.defaultPrevented;
+  },
+}));
+const edListen = CMX.EditorView.updateListener.of(u => { const ed = edOf(u.view); if (ed) ed.onUpdate(u); });
+const foldPlaceholder = (view, onclick) => {
+  const s = el('span', 'cm-foldPlaceholder', '⋯ setup');
+  s.title = 'The Typst setup is folded: click to show it'; s.onclick = e => { onclick(e); if (S.file) expandFold(); };
+  return s;
+};
+function edExtensions() {
+  return [
+    EDC.vim.of([]), edBridge, edListen, CMX.history(), CMX.drawSelection(), CMX.dropCursor(),
+    CMX.EditorView.lineWrapping, EDC.ro.of([]), EDC.tab.of([]), EDC.hl.of([]),
+    CMX.codeFolding({ placeholderDOM: foldPlaceholder }), foldGuard,
+    CMX.EditorView.atomicRanges.of(view => CMX.foldedRanges(view.state)),
+    foundField, CMX.autocompletion({ override: [refCompletions], icons: false }),
+    CMX.keymap.of([...CMX.historyKeymap, ...CMX.defaultKeymap]),
+    CMX.EditorView.contentAttributes.of({ spellcheck: 'false', autocorrect: 'off', autocapitalize: 'off' }),
+  ];
+}
+const edState = text => CMX.EditorState.create({ doc: text, extensions: edExtensions() });
+function liveState(path, except) { for (const ed of EDS) if (ed !== except && ed.path === path) return ed.view.state; return null; }
+function edSeed(path, base) {  // undo for PATH starts at BASE (the disk version under resumed edits)
+  if (path != null && base != null && !STATES.has(path) && !liveState(path)) STATES.set(path, edState(base));
+}
+class Ed {
+  constructor(host, { stacked = false } = {}) {
+    this.host = host; this.stacked = stacked; this.path = null; this.lang = null; this.tab = 2; this.ro = false;
+    this.L = {}; this.prog = 0; this.vimMode = 'normal'; this.st = null; this._cm = null; this._found = null; this._geo = 0;
+    this.view = new CMX.EditorView({ parent: host, state: edState('') });
+    this.view._ed = this; this.view.contentDOM._ed = this;
+    for (const t of ['keyup', 'mouseup', 'click', 'focus']) this.view.contentDOM.addEventListener(t, e => this.fire(t, e));
+    this.view.scrollDOM.addEventListener('scroll', e => this.fire('scroll', e));
+    this.view.dom.addEventListener('keydown', e => { e.vimMode = VIM ? this.vimMode : null; }, true);  // before vim acts on it
+    EDS.add(this);
+    this.sync();
+  }
+  onUpdate(u) {
+    const prog = this.prog > 0;
+    if (u.docChanged && !prog) queueMicrotask(() => this.fire('input'));
+    if (u.selectionSet) queueMicrotask(() => this.fire('select'));  // as a textarea: programmatic selections too
+    if ((u.geometryChanged || u.heightChanged) && !this._geo) this._geo = requestAnimationFrame(() => { this._geo = 0; this.fire('geometry'); });
+  }
+  run(spec) { this.prog++; try { this.view.dispatch(spec); } finally { this.prog--; } }
+  addEventListener(t, fn) { (this.L[t] || (this.L[t] = [])).push(fn); }
+  fire(t, e) { for (const fn of this.L[t] || []) fn(e); }
+  sync() {  // the compartments follow this editor's settings (and a state brought back from STATES)
+    if (VIM && !VIMX) VIMX = CMX.vim({ status: true });
+    this.run({ effects: [
+      EDC.ro.reconfigure(this.ro ? CMX.EditorState.readOnly.of(true) : []),
+      EDC.tab.reconfigure([CMX.EditorState.tabSize.of(this.tab), CMX.indentUnit.of(' '.repeat(this.tab))]),
+      EDC.hl.reconfigure(this.lang ? hlPlugin(this.lang) : []),
+      EDC.vim.reconfigure(VIM ? VIMX : []),
+    ] });
+    this.view.dom.classList.toggle('ro', this.ro);
+    const cm = VIM ? CMX.getCM(this.view) : null;
+    if (cm !== this._cm) {
+      this._cm = cm; this.vimMode = 'normal';
+      if (cm) cm.on('vim-mode-change', ev => { this.vimMode = ev.mode; });
+    }
+  }
+  open(path, text) {  // show PATH's TEXT, with that file's history when this session has one
+    this.park();
+    this.path = path;
+    const st = path != null ? liveState(path, this) || STATES.get(path) : null;
+    this.view.setState(st || edState(text));
+    this._found = null;
+    this.sync();
+    if (st) this.setValue(text);  // what changed since: one undoable step
+  }
+  park() {  // keep this file's state (history, folds) for when it opens again
+    if (this.path == null) return;
+    STATES.delete(this.path); STATES.set(this.path, this.view.state);
+    if (STATES.size > STATES_MAX) STATES.delete(STATES.keys().next().value);
+  }
+  close() { this.park(); EDS.delete(this); this.view.destroy(); }
+  get value() { return this.view.state.doc.toString(); }
+  set value(t) { this.setValue(t); }
+  setValue(t, hist = true) {  // replace only what differs, so the caret and folds stay where they can
+    const cur = this.value;
+    if (cur === t) return;
+    const n = Math.min(cur.length, t.length);
+    let a = 0, z = 0;
+    while (a < n && cur.charCodeAt(a) === t.charCodeAt(a)) a++;
+    while (z < n - a && cur.charCodeAt(cur.length - 1 - z) === t.charCodeAt(t.length - 1 - z)) z++;
+    this.run({ changes: { from: a, to: cur.length - z, insert: t.slice(a, t.length - z) }, filter: false,
+      annotations: [CMX.Transaction.addToHistory.of(hist), CMX.isolateHistory.of('full')] });
+  }
+  replaceRange(a, b, text, isolate = true) {  // a user edit, the caret after it: its own undo step unless ISOLATE is false
+    this.view.dispatch({ changes: { from: a, to: b, insert: text }, selection: { anchor: a + text.length },
+      userEvent: isolate ? 'input' : 'input.type', scrollIntoView: true, annotations: isolate ? CMX.isolateHistory.of('full') : [] });
+  }
+  get selectionStart() { return this.view.state.selection.main.from; }
+  get selectionEnd() { return this.view.state.selection.main.to; }
+  setSelectionRange(a, b) {
+    const L = this.view.state.doc.length, c = x => Math.max(0, Math.min(x, L));
+    this.run({ selection: { anchor: c(a), head: c(b ?? a) } });
+  }
+  get scrollTop() { return this.view.scrollDOM.scrollTop; }
+  set scrollTop(v) { this.view.scrollDOM.scrollTop = v; }
+  get scrollLeft() { return this.view.scrollDOM.scrollLeft; }
+  set scrollLeft(v) { this.view.scrollDOM.scrollLeft = v; }
+  get clientHeight() { return this.view.scrollDOM.clientHeight; }
+  get scrollHeight() { return this.view.scrollDOM.scrollHeight; }
+  get clientWidth() { return this.view.scrollDOM.clientWidth; }
+  get offsetWidth() { return this.view.scrollDOM.offsetWidth; }
+  get readOnly() { return this.ro; }
+  set readOnly(v) { if (this.ro !== !!v) { this.ro = !!v; this.sync(); } }
+  setTab(n) { if (this.tab !== n) { this.tab = n; this.sync(); } }
+  setLang(l) { if (this.lang !== l) { this.lang = l; this.sync(); } }
+  focus() { this.view.focus(); }
+  getBoundingClientRect() { return this.view.dom.getBoundingClientRect(); }
+  found(r) {  // highlight find match R = [from, to], or none
+    const v = r && r[1] > r[0] ? r : null;
+    if (!v && !this._found) return;
+    this._found = v; this.run({ effects: setFound.of(v) });
+  }
+  reveal(pos) { this.run({ effects: CMX.EditorView.scrollIntoView(pos, { y: 'nearest', yMargin: 60 }) }); }
+  docTop() {  // where the text starts, in the overlay's coordinates (the host's content box, unscrolled)
+    const v = this.view;
+    return v.documentTop - this.host.getBoundingClientRect().top + (this.stacked ? 0 : v.scrollDOM.scrollTop);
+  }
+  lineBox() {  // (a, b) -> [top, height] of lines a..b, wrapped or folded
+    const v = this.view, d = v.state.doc, off = this.docTop();
+    return (a, b) => {
+      a = Math.max(1, Math.min(a, d.lines)); b = Math.max(a, Math.min(b, d.lines));
+      const A = v.lineBlockAt(d.line(a).from), B = v.lineBlockAt(d.line(b).to);
+      return [A.top + off, B.bottom - A.top];
+    };
+  }
+}
+/* labquote keys from refs/refs.yml, offered inside #blockq(" / #inlineq(" / #cite-ref(" in .typ files */
+const REFS = { at: 0, keys: [], busy: null };
+async function refKeys() {
+  if (Date.now() - REFS.at < 15000) return REFS.keys;
+  if (!REFS.busy) REFS.busy = api('GET', '/api/refs').then(r => { REFS.keys = r.refs || []; REFS.at = Date.now(); })
+    .catch(() => { REFS.at = Date.now(); }).finally(() => { REFS.busy = null; });
+  await REFS.busy;
+  return REFS.keys;
+}
+const REF_CALL = /#(?:blockq|inlineq|cite-ref)\(\s*"([^"\n]*)$/;
+async function refCompletions(ctx) {
+  const ed = edOf(ctx.view);
+  if (!ed || ed.lang !== 'typ') return null;
+  const line = ctx.state.doc.lineAt(ctx.pos), m = REF_CALL.exec(line.text.slice(0, ctx.pos - line.from));
+  if (!m) return null;
+  const keys = await refKeys(), q = m[1].toLowerCase();
+  const hits = keys.filter(k => !q || k.key.toLowerCase().includes(q) || (k.title || '').toLowerCase().includes(q)).slice(0, 200);
+  if (!hits.length) return null;
+  return { from: ctx.pos - m[1].length, filter: false,
+    options: hits.map(k => ({ label: k.key, detail: (k.title || '').length > 70 ? k.title.slice(0, 67) + '…' : (k.title || ''), type: 'text' })) };
+}
+const editor = new Ed($('#editwrap'));
+
+/* ---------- Typst setup fold: the preamble is one folded range until it is opened ---------- */
+// The editor always holds the whole file; the leading setup is folded at its top (typing cannot
+// land inside it). Click the bar, or the placeholder, to open or fold it.
+const Fold = { collapsed: false, end: 0, path: '' };
 const foldOpen = new Set(); // paths whose setup the user opened; every other .typ starts folded
 function bracketDelta(line) {
   let depth = 0, q = false;
@@ -717,33 +928,31 @@ function preambleEnd(text) { // last 1-based line of the leading setup, or 0 whe
   }
   return last >= 2 ? last : 0;
 }
-function docText() {
-  if (!Fold.collapsed) return editor.value;
-  return editor.value ? Fold.prefix + '\n' + editor.value : Fold.prefix;
-}
-function viewToModel(off) {
-  if (!Fold.collapsed) return off;
-  return editor.value ? Fold.prefix.length + 1 + off : Math.min(off, Fold.prefix.length);
-}
-function modelToView(off) {
-  if (!Fold.collapsed) return off;
-  if (!editor.value) return 0;
-  const cut = Fold.prefix.length + 1;
-  return Math.max(0, Math.min(editor.value.length, off - cut));
-}
-function viewSpan(a, b) { // model lines -> textarea lines; null when the range is inside the fold
+function docText() { return editor.value; }
+function viewSpan(a, b) { // the shown part of lines a..b; null when the range is inside the folded setup
   if (!Fold.collapsed) return [a, b];
   if (b <= Fold.end) return null;
-  return [Math.max(1, a - Fold.end), b - Fold.end];
+  return [Math.max(a, Fold.end + 1), b];
 }
-function clearFold() { Fold.collapsed = false; Fold.end = 0; Fold.prefix = ''; Fold.path = ''; }
+function setFold(end) { // fold lines 1..END of the main editor (0: unfold)
+  const st = editor.view.state, d = st.doc, eff = [];
+  CMX.foldedRanges(st).between(0, d.length, (from, to) => { eff.push(CMX.unfoldEffect.of({ from, to })); });
+  const on = end >= 2 && d.lines >= 2;
+  if (on) eff.push(CMX.foldEffect.of({ from: 0, to: d.line(Math.min(end, d.lines)).to }));
+  if (eff.length) editor.run({ effects: eff });
+  Fold.collapsed = on; Fold.end = on ? Math.min(end, d.lines) : 0; Fold.path = on && S.file ? S.file.path : '';
+}
+function bodyStart() { // the first offset after the folded setup
+  const d = editor.view.state.doc;
+  return Fold.collapsed ? (Fold.end < d.lines ? d.line(Fold.end + 1).from : d.length) : 0;
+}
+function clearFold() { setFold(0); }
 function updateFoldBar() {
   const bar = $('#foldbar');
   const full = S.file && S.file.lang === 'typ' ? docText() : '';
   const n = Fold.collapsed ? Fold.end : preambleEnd(full);
   if (!n) { bar.hidden = true; return; }
-  const src = Fold.collapsed ? Fold.prefix : full;
-  const first = src.split('\n').map(l => l.trim()).find(l => l.startsWith('#set ') || (l && !l.startsWith('//'))) || 'setup';
+  const first = full.split('\n').slice(0, n).map(l => l.trim()).find(l => l.startsWith('#set ') || (l && !l.startsWith('//'))) || 'setup';
   const label = first.length > 78 ? first.slice(0, 75) + '…' : first;
   bar.hidden = false;
   bar.textContent = `${Fold.collapsed ? '▸' : '▾'} ${label}   ·  ${n} lines`;
@@ -751,45 +960,28 @@ function updateFoldBar() {
   bar.setAttribute('aria-expanded', Fold.collapsed ? 'false' : 'true');
 }
 function presentDoc(full, selA, selB, top) { // show FULL, folding its setup when this file wants that
-  const path = S.file.path, want = S.file.lang === 'typ' && !foldOpen.has(path) && preambleEnd(full) >= 2;
-  if (!want) {
-    clearFold();
-    editor.value = full;
-    const L = full.length;
-    editor.setSelectionRange(Math.max(0, Math.min(selA, L)), Math.max(0, Math.min(selB, L)));
-    editor.scrollTop = top || 0;
-    updateFoldBar();
-    return;
-  }
-  const end = preambleEnd(full), lines = full.split('\n');
-  Fold.collapsed = true; Fold.end = end; Fold.prefix = lines.slice(0, end).join('\n'); Fold.path = path;
-  editor.value = lines.slice(end).join('\n');
-  const L = editor.value.length;
-  editor.setSelectionRange(Math.max(0, Math.min(modelToView(selA), L)), Math.max(0, Math.min(modelToView(selB), L)));
+  const path = S.file.path, end = S.file.lang === 'typ' && !foldOpen.has(path) ? preambleEnd(full) : 0;
+  editor.open(path, full);
+  setFold(end);
+  const b0 = bodyStart();
+  editor.setSelectionRange(Math.max(b0, selA), Math.max(b0, selB));
   editor.scrollTop = top || 0;
   updateFoldBar();
 }
 function expandFold() {
   if (!Fold.collapsed || !S.file) return;
-  const model = docText(), a = viewToModel(editor.selectionStart), b = viewToModel(editor.selectionEnd), top = editor.scrollTop;
   foldOpen.add(S.file.path);
-  clearFold();
-  editor.value = model;
-  const L = model.length;
-  editor.setSelectionRange(Math.min(a, L), Math.min(b, L));
-  editor.scrollTop = top;
-  updateFoldBar();
+  setFold(0);
+  updateFoldBar(); renderMarks();
 }
 function collapseFold() {
   if (!S.file) return;
-  const model = docText(), end = preambleEnd(model);
+  const end = preambleEnd(docText());
   if (end < 2) return;
-  const a = viewToModel(editor.selectionStart), b = viewToModel(editor.selectionEnd), lines = model.split('\n');
   foldOpen.delete(S.file.path);
-  Fold.collapsed = true; Fold.end = end; Fold.prefix = lines.slice(0, end).join('\n'); Fold.path = S.file.path;
-  editor.value = lines.slice(end).join('\n');
-  const L = editor.value.length;
-  editor.setSelectionRange(Math.max(0, Math.min(modelToView(a), L)), Math.max(0, Math.min(modelToView(b), L)));
+  setFold(end);
+  const b0 = bodyStart();
+  if (editor.selectionStart < b0) editor.setSelectionRange(b0, Math.max(b0, editor.selectionEnd));
   editor.scrollTop = 0;
   updateFoldBar();
 }
@@ -1107,8 +1299,8 @@ function multiClick(path, range, additive) {
   dropSections(); renderTree(); renderDetail();
 }
 function dropSections() {
-  if (F.ta && F.ta._st) closeFind(false);
-  for (const st of S.msec.values()) st.sec.remove(); S.msec.clear(); }
+  if (F.ta && F.ta.st) closeFind(false);
+  for (const st of S.msec.values()) { if (st.ta) st.ta.close(); st.sec.remove(); } S.msec.clear(); }
 async function leaveMulti(path) {  // back to the single view on PATH (unsaved edits stay in S.bufs)
   S.multi.clear(); dropSections();
   if (path !== S.sel) return select(path);
@@ -1418,7 +1610,6 @@ function renderDirInfo(n) {
 /* ---------- multi-selection view (each text file is an editor) ---------- */
 let mGen = 0;
 let EZ = 1;  // text size of the editors (setZoom)
-const SLH = () => 19.5 * EZ;  // .sedit line height: 13px * 1.5, times the text size
 async function renderMulti() {
   const gen = ++mGen, paths = [...S.byPath.keys()].filter(p => S.multi.has(p));
   $('#mcount').textContent = `${paths.length} selected · edit in place, Ctrl/Cmd+S saves the focused file · Ctrl/Cmd/Shift+click to change, Esc clears`;
@@ -1429,7 +1620,7 @@ async function renderMulti() {
   for (const f of byStatus(S.feedback.filter(x => x.paths.length > 1 && x.paths.some(k => keys.includes(k))))) cross.append(fbItem(f, true));
   const old = $('#mcross'); if (old) old.replaceWith(cross); else list.prepend(cross);
   const secs = paths.map((p, i) => multiSection(S.byPath.get(p), files[i]));
-  for (const [p, st] of [...S.msec]) if (!S.multi.has(p)) { st.sec.remove(); S.msec.delete(p); }
+  for (const [p, st] of [...S.msec]) if (!S.multi.has(p)) { if (st.ta) st.ta.close(); st.sec.remove(); S.msec.delete(p); }
   let prev = cross;  // put sections in order without moving ones already in place (moving drops focus)
   for (const sec of secs) { if (prev.nextSibling !== sec) prev.after(sec); prev = sec; }
   if (document.body.classList.contains('wrap')) for (const st of S.msec.values()) if (st.ta) paintSection(st);  // measure in place
@@ -1481,8 +1672,9 @@ function sectionBody(st, n, f) {
       } else {
         const img = document.createElement('img'); img.alt = f.path; img.draggable = false; img.src = src; box.append(img);
       }
+      if (st.ta) st.ta.close();
       if (st.body) st.body.replaceWith(box); else st.sec.append(box);
-      st.body = box; st.ta = null; st.unchars = null; st.plot = true; st.disk = f.hash; st.lang = null;
+      st.body = box; st.ta = null; st.marks = null; st.unchars = null; st.plot = true; st.disk = f.hash; st.lang = null;
       box.classList.remove('flash'); void box.offsetWidth; box.classList.add('flash');
     }
     return;
@@ -1491,22 +1683,23 @@ function sectionBody(st, n, f) {
   if (!f || f.content == null) {  // folder, binary, error: a one-line summary
     const kids = (n.children || []).map(c => c.name + (c.type === 'dir' ? '/' : '')).join('   ');
     const m = el('div', 'msg', f?.error || (n.type === 'dir' ? (n.linked ? 'linked folder' : kids || 'empty folder') : countText(n) || n.type));
+    if (st.ta) st.ta.close();
     if (st.body) st.body.replaceWith(m); else st.sec.append(m);
-    st.body = m; st.ta = null; st.unchars = null; return;
+    st.body = m; st.ta = null; st.marks = null; st.unchars = null; return;
   }
   if (!st.ta) {
     const body = el('div', 'sedit'), b = resumeBuf(st.path, f);
-    st.hlp = el('pre', 'shl'); st.ta = el('textarea'); st.ta._st = st;
-    st.ta.spellcheck = false; st.ta.setAttribute('autocomplete', 'off'); st.ta.setAttribute('autocapitalize', 'off');
-    st.ta.style.tabSize = st.hlp.style.tabSize = /\.py$/.test(st.path) ? 4 : 2;
     st.lang = langOf(st.path);
     st.hash = b ? b.hash : f.hash; st.original = b ? b.original : f.content; st.disk = f.hash;
-    st.ta.value = b ? b.value : f.content;
-    histSync(st.path, st.ta.value, b ? b.original : null);
-    wireUndo(st.ta, () => st.path);
+    if (b) edSeed(st.path, b.original);  // undo can walk back to the disk version
+    if (st.body) st.body.replaceWith(body); else st.sec.append(body);
+    st.body = body; st.marks = null;
+    st.ta = new Ed(body, { stacked: true }); st.ta.st = st;
+    st.ta.setTab(/\.py$/.test(st.path) ? 4 : 2); st.ta.setLang(st.lang);
+    st.ta.open(st.path, b ? b.value : f.content);
     if (b && b.hash !== f.hash) st.conflict = f;
     st.ta.addEventListener('input', () => { syncBuf(st); paintSection(st); sectionState(st); if (!$('#findbar').hidden && F.ta === st.ta) findSearch(true); });
-    st.ta.addEventListener('scroll', () => { st.hlp.scrollLeft = st.ta.scrollLeft; });
+    st.ta.addEventListener('geometry', () => sectionMarks(st));
     st.ta.addEventListener('focus', () => { S.lastSec = st; });
     ['keyup', 'mouseup'].forEach(ev => st.ta.addEventListener(ev, () => {
       const sl = selLines(st.ta); if (st.fbBtn) st.fbBtn.textContent = sl ? `+ Feedback on ${linesLabel(sl)}` : '+ Feedback';
@@ -1521,17 +1714,12 @@ function sectionBody(st, n, f) {
     });
     st.unchars = el('div', 'unchars');
     st.unchars.title = 'Characters added or removed since the last save';
-    body.append(st.hlp, st.ta, st.unchars);
-    if (st.body) st.body.replaceWith(body); else st.sec.append(body);
-    st.body = body;
+    body.append(st.unchars);
     paintSection(st);
   } else if (f.hash !== st.disk) {  // changed on disk since loaded
     st.disk = f.hash;
     if (!sDirty(st)) {
-      const a = st.ta.selectionStart, z = st.ta.selectionEnd;
-      st.ta.value = f.content; st.hash = f.hash; st.original = f.content; st.conflict = null;
-      histSync(st.path, f.content);  // the agent's change is one undoable step
-      st.ta.setSelectionRange(Math.min(a, f.content.length), Math.min(z, f.content.length));
+      st.ta.value = f.content; st.hash = f.hash; st.original = f.content; st.conflict = null;  // the agent's change is one undoable step
       paintSection(st);
       st.body.classList.remove('flash'); void st.body.offsetWidth; st.body.classList.add('flash');
     } else if (f.hash !== st.hash) {  // unsaved edits here: merge when the changes do not overlap
@@ -1539,7 +1727,7 @@ function sectionBody(st, n, f) {
       if (merged == null) st.conflict = f;
       else {
         st.ta.value = merged; st.hash = f.hash; st.original = f.content; st.conflict = null;
-        histSync(st.path, merged); syncBuf(st); paintSection(st);
+        syncBuf(st); paintSection(st);
         st.body.classList.remove('flash'); void st.body.offsetWidth; st.body.classList.add('flash');
         toast(`${st.path}: merged the agent's change into your unsaved edits`);
       }
@@ -1554,16 +1742,8 @@ function sectionMarks(st) {  // change bars in a stacked editor (it does not scr
   const at = lineBox(st.ta);
   for (const c of chg) { const [top, height] = at(c.a, c.b); st.marks.append(changeWash(c, top, height), changeBar(c, top, height, 4)); }
 }
-function paintSection(st) {
-  const v = st.ta.value, on = !!st.lang && v.length <= HL_MAX;
-  st.body.classList.toggle('hl', on);
-  st.hlp.innerHTML = on ? hl(v, st.lang) + '\n' : '';
-  if (document.body.classList.contains('wrap')) {  // wrapped: measure, keeping the list where it was
-    const list = $('#mlist'), top = list.scrollTop;
-    st.ta.style.height = '0px'; st.ta.style.height = (st.ta.scrollHeight + 2) + 'px';
-    list.scrollTop = top;
-  } else st.ta.style.height = (v.split('\n').length * SLH() + 20 + 16) + 'px';  // fit the text: the list scrolls, not the editor
-  sectionMarks(st);
+function paintSection(st) {  // a stacked editor grows with its text (the list scrolls); only its marks need painting
+  if (st.ta) sectionMarks(st);
 }
 /* text size of the editors: Ctrl+scroll, or Ctrl+= / Ctrl+- / Ctrl+0, over the main or the stacked editors */
 function setZoom(z, quiet) {
@@ -1571,7 +1751,8 @@ function setZoom(z, quiet) {
   EZ = Math.min(3, Math.max(0.6, Math.round(z * 10) / 10));
   document.documentElement.style.setProperty('--ez', EZ); store('ezoom', EZ);
   if (EZ === old) return;
-  editor.scrollTop *= EZ / old; editor.scrollLeft *= EZ / old;  // keep the same lines in view
+  editor.scrollTop *= EZ / old;  // keep the same lines in view
+  for (const ed of EDS) ed.view.requestMeasure();
   syncHL(); renderMarks();
   for (const st of S.msec.values()) if (st.ta) paintSection(st);
   if (!quiet) toast(`Text size ${Math.round(EZ * 100)}%`);
@@ -1592,7 +1773,6 @@ document.addEventListener('keydown', e => {
   e.preventDefault(); setZoom(step === undefined ? 1 : EZ + step);
 });
 setZoom(load('ezoom', 1), true);
-new ResizeObserver(() => { if (document.body.classList.contains('wrap')) { syncHL(); renderMarks(); } }).observe(editor);
 let mlistW = 0;
 new ResizeObserver(() => {  // wrapped stacked editors change height when the pane changes width
   const w = $('#mlist').clientWidth;
@@ -1661,7 +1841,7 @@ async function openFile(path) {
   try {
     const disk = await api('GET', '/api/file?path=' + encodeURIComponent(path));
     const b = resumeBuf(path, disk);
-    if (b) histSync(path, b.value, b.original);  // undo can walk back to the disk version
+    if (b) edSeed(path, b.original);  // undo can walk back to the disk version
     const f = b ? { ...disk, content: b.value, source: disk.kind === 'plot' } : disk;
     setFile(f);
     if (b) {  // resume unsaved edits; the conflict banner only when they could not be merged
@@ -1681,18 +1861,17 @@ function setFile(f, keepView) {
     path: f.path, hash: f.hash, kind: source ? 'text' : f.kind, mime: f.mime || null, plot,
     original: f.kind === 'text' || source ? f.content : null,
   };
-  const top = editor.scrollTop, ma = keepView ? viewToModel(editor.selectionStart) : 0, mb = keepView ? viewToModel(editor.selectionEnd) : 0;
+  const top = editor.scrollTop, ma = keepView ? editor.selectionStart : 0, mb = keepView ? editor.selectionEnd : 0;
   if (plot && !source) {
-    editor.readOnly = true; editor.value = ''; S.file.lang = null; clearFold(); updateFoldBar(); showPlot(f, keepView);
+    editor.open(null, ''); editor.readOnly = true; S.file.lang = null; clearFold(); updateFoldBar(); showPlot(f, keepView);
   } else if (f.kind === 'text' || source) {
     editor.readOnly = false;
-    editor.style.tabSize = hlEl.style.tabSize = /\.py$/.test(f.path) ? 4 : 2;
+    editor.setTab(/\.py$/.test(f.path) ? 4 : 2);
     S.file.lang = langOf(f.path);
-    histSync(f.path, f.content);  // history keeps the whole file; the setup fold is only how it is shown
-    presentDoc(f.content, ma, mb, keepView ? top : 0);
+    presentDoc(f.content, ma, mb, keepView ? top : 0);  // the file's own history comes back with it
   } else {
+    editor.open(null, f.kind === 'binary' ? '(binary file — not editable here)' : '(file too large to edit here)');
     editor.readOnly = true; S.file.lang = null; clearFold();
-    editor.value = f.kind === 'binary' ? '(binary file — not editable here)' : '(file too large to edit here)';
     updateFoldBar();
   }
   updateUndoButtons();
@@ -1846,96 +2025,27 @@ function updateFileState() {
   document.title = (d ? '● ' : '') + 'Write — ' + (S.rootName || '');
 }
 function updatePos() {
-  const off = viewToModel(editor.selectionStart), v = docText().slice(0, off);
-  const line = v.split('\n').length, col = v.length - v.lastIndexOf('\n');
-  $('#pos').textContent = S.file && S.file.kind === 'text' ? `Ln ${line}, Col ${col}` : '';
+  const off = editor.selectionStart, line = editor.view.state.doc.lineAt(off);
+  $('#pos').textContent = S.file && S.file.kind === 'text' ? `Ln ${line.number}, Col ${off - line.from + 1}` : '';
 }
 editor.addEventListener('input', () => { updateFileState(); updatePos(); renderHL(); renderMarks(); });
 editor.addEventListener('scroll', syncHL);
 ['keyup', 'click', 'select', 'mouseup'].forEach(ev => editor.addEventListener(ev, () => { updatePos(); updateFbButton(); }));
-/* ---------- undo / redo: one history per file, shared by the single and the stacked editors ---------- */
-// The browser's own undo is wiped whenever a textarea's value is set (switching files or views, disk
-// reloads), so treedit keeps its own. Typing groups by word; deletes, commands and disk reloads are steps.
-const HIST = new Map();  // path -> { stack: [{ v, a, b }], i, t, kind }
-const H = { replaying: false, nextKind: null };
-function histSync(path, value, base) {  // make sure PATH's history ends at VALUE (a load or a disk change)
-  let h = HIST.get(path);
-  if (!h) {
-    h = { stack: base != null && base !== value ? [{ v: base, a: 0, b: 0 }] : [], i: -1, t: 0, kind: 'load' };
-    HIST.set(path, h);
-  }
-  if (h.i < 0 || h.stack[h.i].v !== value) {
-    h.stack.length = h.i + 1;
-    h.stack.push({ v: value, a: 0, b: 0 }); h.i = h.stack.length - 1; h.kind = 'load';
-  }
-}
-function histKind(e) {
-  if (H.nextKind) { const k = H.nextKind; H.nextKind = null; return k; }
-  if (e && e.inputType === 'insertText' && e.data) return /\s/.test(e.data) ? 'space' : 'type';
-  if (e && /^delete(Content|Word)(Backward|Forward)$/.test(e.inputType || '')) return 'del';
-  return 'other';
-}
-function histText(ta) { return ta === editor ? docText() : ta.value; }
-function histSel(ta) { return ta === editor ? [viewToModel(ta.selectionStart), viewToModel(ta.selectionEnd)] : [ta.selectionStart, ta.selectionEnd]; }
-function histRecord(path, ta, kind) {
-  const h = HIST.get(path), v = histText(ta);
-  if (!h) return histSync(path, v);
-  if (h.stack[h.i].v === v) return;
-  // a word and the spaces after it are one step: typing merges until a letter follows a space
-  const now = Date.now(), typing = kind === 'type' || kind === 'space', wasTyping = h.kind === 'type' || h.kind === 'space';
-  const merge = h.i > 0 && now - h.t < 1500 && ((typing && wasTyping && !(kind === 'type' && h.kind === 'space')) || (kind === 'del' && h.kind === 'del'));
-  h.stack.length = h.i + 1;  // a new edit drops the redo branch
-  const [sa, sb] = histSel(ta);
-  const entry = { v, a: sa, b: sb };
-  if (merge) h.stack[h.i] = entry;
-  else { h.stack.push(entry); h.i++; if (h.stack.length > 400) { h.stack.shift(); h.i--; } }
-  h.t = now; h.kind = kind;
-  updateUndoButtons();
-}
-function histStep(path, ta, dir) {  // dir -1 undo, +1 redo; false when there is nothing to do
-  const h = HIST.get(path);
-  if (!h) return false;
-  if (h.stack[h.i].v !== histText(ta)) histRecord(path, ta, 'other');  // never lose an unrecorded change
-  const j = h.i + dir;
-  if (j < 0 || j >= h.stack.length) { toast(dir < 0 ? 'Nothing to undo' : 'Nothing to redo'); return false; }
-  const from = h.stack[h.i], to = h.stack[j];
-  h.i = j; h.kind = 'jump';
-  const at = dir < 0 ? Math.min(from.a, to.v.length) : to.a;  // the caret goes to where the change was
-  const end = dir < 0 ? at : to.b;
-  if (ta === editor) presentDoc(to.v, at, end, ta.scrollTop);
-  else { ta.value = to.v; ta.setSelectionRange(at, end); }
-  ta.focus();
-  H.replaying = true;
-  try { ta.dispatchEvent(new Event('input')); } finally { H.replaying = false; }
-  updateUndoButtons();
-  return true;
-}
-function undoKey(e) {  // -1 undo, +1 redo, 0 neither
-  if (!(e.ctrlKey || e.metaKey) || e.altKey) return 0;
-  const k = e.key.toLowerCase();
-  return k === 'z' ? (e.shiftKey ? 1 : -1) : k === 'y' && !e.shiftKey ? 1 : 0;
-}
-function wireUndo(ta, pathOf) {  // keys, the context menu's Undo/Redo, and recording
-  ta.addEventListener('keydown', e => {
-    const d = undoKey(e), path = pathOf();
-    if (!d || !path) return;
-    e.preventDefault(); e.stopImmediatePropagation(); histStep(path, ta, d);
-  });
-  ta.addEventListener('beforeinput', e => {
-    if (e.inputType !== 'historyUndo' && e.inputType !== 'historyRedo') return;
-    const path = pathOf(); if (!path) return;
-    e.preventDefault(); histStep(path, ta, e.inputType === 'historyUndo' ? -1 : 1);
-  });
-  ta.addEventListener('input', e => { const path = pathOf(); if (!H.replaying && path) histRecord(path, ta, histKind(e)); });
-}
+/* ---------- undo / redo: CodeMirror's history, one per file (Ed.park keeps it across file switches) ---------- */
 function updateUndoButtons() {
-  const h = S.file && S.file.kind === 'text' ? HIST.get(S.file.path) : null;
-  $('#b-undo').disabled = !h || h.i <= 0;
-  $('#b-redo').disabled = !h || h.i >= h.stack.length - 1;
+  const on = !!S.file && S.file.kind === 'text' && !editor.readOnly;
+  $('#b-undo').disabled = !on || CMX.undoDepth(editor.view.state) === 0;
+  $('#b-redo').disabled = !on || CMX.redoDepth(editor.view.state) === 0;
 }
-wireUndo(editor, () => (S.file && S.file.kind === 'text' && !editor.readOnly ? S.file.path : null));
-$('#b-undo').onclick = () => S.file && histStep(S.file.path, editor, -1);
-$('#b-redo').onclick = () => S.file && histStep(S.file.path, editor, 1);
+function undoStep(dir) {
+  if (!S.file || editor.readOnly) return;
+  if (!(dir < 0 ? CMX.undo : CMX.redo)(editor.view)) toast(dir < 0 ? 'Nothing to undo' : 'Nothing to redo');
+  editor.focus();
+}
+$('#b-undo').onclick = () => undoStep(-1);
+$('#b-redo').onclick = () => undoStep(1);
+editor.addEventListener('input', updateUndoButtons);
+editor.addEventListener('geometry', () => { syncHL(); renderMarks(); });  // line heights settle after CodeMirror measures
 
 /* ---------- comment toggling: Ctrl+/ (line), Shift+Alt+A (block) ---------- */
 const C_HASH = ['#', null], C_SLASH = ['//', ['/*', '*/']], C_XML = [null, ['<!--', '-->']];
@@ -1953,10 +2063,8 @@ function commentSyntax(path) {
   if (COMMENT_BY_NAME[name]) return COMMENT_BY_NAME[name];
   return ext in COMMENT_BY_EXT ? COMMENT_BY_EXT[ext] : undefined;  // false = the format has no comments
 }
-function replaceRange(ta, a, b, text) {  // one undo step (comment toggles, indents, ...)
-  H.nextKind = 'cmd';
-  ta.focus(); ta.setSelectionRange(a, b);
-  if (!document.execCommand('insertText', false, text)) { ta.setRangeText(text, a, b, 'end'); ta.dispatchEvent(new Event('input')); }
+function replaceRange(ta, a, b, text, isolate = true) {  // one undo step (comment toggles, indents, ...)
+  ta.focus(); ta.replaceRange(a, b, text, isolate);
 }
 function toggleComment(ta, path, block) {
   let cm = commentSyntax(path);
@@ -1993,7 +2101,7 @@ function indentUnit(ta, path) {  // tabs if the file indents with tabs, else 4 s
 function indentBlock(ta, path, out) {  // Tab: indent the selected lines (or insert one); Shift+Tab: outdent them
   const v = ta.value, s0 = ta.selectionStart, e1 = ta.selectionEnd, unit = indentUnit(ta, path);
   const block = v.slice(s0, e1).includes('\n');
-  if (!out && !block) return replaceRange(ta, s0, e1, unit);
+  if (!out && !block) return replaceRange(ta, s0, e1, unit, !VIM);  // in vim, part of the insert
   const e0 = e1 > s0 && v[e1 - 1] === '\n' ? e1 - 1 : e1;  // a selection ending at a line start leaves that line
   const ls = v.lastIndexOf('\n', s0 - 1) + 1, le0 = v.indexOf('\n', e0), le = le0 < 0 ? v.length : le0;
   const width = unit === '\t' ? 4 : unit.length, lines = v.slice(ls, le).split('\n');
@@ -2013,7 +2121,7 @@ function autoIndent(ta, path) {  // Enter keeps the line's indent, one level mor
   const lang = langOf(path), tail = line.trimEnd();
   if ((lang === 'py' && tail.endsWith(':')) || (['js', 'c', 'json', 'css'].includes(lang) && /[{[(]$/.test(tail)))
     ind += ind.includes('\t') ? '\t' : lang === 'py' ? '    ' : '  ';
-  replaceRange(ta, at, ta.selectionEnd, '\n' + ind);
+  replaceRange(ta, at, ta.selectionEnd, '\n' + ind, !VIM);  // in vim, part of the insert (one u undoes it)
 }
 const plainEnter = e => e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && !e.isComposing;
 function commentKey(e) {  // 'line' (Ctrl+/) | 'block' (Ctrl+Shift+/ or Shift+Alt+A) | null
@@ -2025,17 +2133,6 @@ function commentKey(e) {  // 'line' (Ctrl+/) | 'block' (Ctrl+Shift+/ or Shift+Al
 
 /* ---------- find (Ctrl+F): in the main editor or a stacked one ---------- */
 const F = { ta: null, hits: [], i: -1, len: 0 };
-let mirror2 = null;
-function textRect(ta, at, len) {  // where characters at..at+len sit in the text box's content (wrapped or not)
-  const cs = getComputedStyle(ta), wrap = document.body.classList.contains('wrap');
-  if (!mirror2) { mirror2 = el('div'); mirror2.setAttribute('aria-hidden', 'true'); document.body.append(mirror2); }
-  Object.assign(mirror2.style, { position: 'absolute', visibility: 'hidden', left: '-99999px', top: '0', boxSizing: 'border-box',
-    whiteSpace: wrap ? 'pre-wrap' : 'pre', overflowWrap: wrap ? 'anywhere' : 'normal', width: ta.clientWidth + 'px', padding: cs.padding,
-    fontFamily: cs.fontFamily, fontSize: cs.fontSize, lineHeight: cs.lineHeight, tabSize: cs.tabSize });
-  const v = ta.value, mark = el('span', null, v.slice(at, at + len) || ' ');
-  mirror2.textContent = ''; mirror2.append(v.slice(0, at), mark, v.slice(at + len) || ' ');
-  return { top: mark.offsetTop, left: mark.offsetLeft, width: mark.offsetWidth, height: mark.offsetHeight };
-}
 function findSearch(keepIndex) {
   const ta = F.ta, q = $('#findq').value;
   F.hits = []; F.len = q.length;
@@ -2051,23 +2148,16 @@ function findSearch(keepIndex) {
   $('#findn').textContent = !q ? '' : F.hits.length ? `${F.i + 1} of ${F.hits.length}${F.hits.length >= 20000 ? '+' : ''}` : 'no matches';
   findShow(false);
 }
-function findShow(select) {  // highlight the current match, scroll to it; select it in the text box when asked
-  const ta = F.ta, layer = ta === editor ? $('#findhl') : ta && ta._st && ta._st.marks;
-  $('#findhl').textContent = '';
-  for (const st of S.msec.values()) if (st.marks) st.marks.querySelectorAll('.found').forEach(x => x.remove());
+function findShow(select) {  // highlight the current match and bring it into view; select it when asked
+  const ta = F.ta;
+  for (const ed of EDS) if (ed !== ta) ed.found(null);
   findTicks();
-  if (!ta || F.i < 0) return;
-  const at = F.hits[F.i], r = textRect(ta, at, F.len);
-  if (layer) { const m = el('div', 'found'); Object.assign(m.style, { top: r.top + 'px', left: r.left + 'px', width: r.width + 'px', height: r.height + 'px' }); layer.append(m); }
+  if (!ta || F.i < 0) { if (ta) ta.found(null); return; }
+  const at = F.hits[F.i];
+  ta.found([at, at + F.len]);
   if (select) ta.setSelectionRange(at, at + F.len);
-  if (ta === editor) {
-    if (r.top < editor.scrollTop || r.top + r.height > editor.scrollTop + editor.clientHeight) editor.scrollTop = Math.max(0, r.top - editor.clientHeight / 3);
-    if (!document.body.classList.contains('wrap') && (r.left < editor.scrollLeft || r.left + r.width > editor.scrollLeft + editor.clientWidth)) editor.scrollLeft = Math.max(0, r.left - 40);
-    syncHL();
-  } else {  // a stacked editor: scroll the list
-    const list = $('#mlist'), y = ta.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop + r.top;
-    if (y < list.scrollTop + 40 || y > list.scrollTop + list.clientHeight - 40) list.scrollTop = Math.max(0, y - list.clientHeight / 3);
-  }
+  ta.reveal(at);  // scrolls the stacked list too
+  if (ta === editor) syncHL();
 }
 function findTicks() {  // every match as a tick in the overview strip (main editor)
   const ovr = $('#ovr');
@@ -2100,8 +2190,7 @@ function openFind(ta) {
 }
 function closeFind(focusText) {
   $('#findbar').hidden = true;
-  $('#findhl').textContent = '';
-  for (const st of S.msec.values()) if (st.marks) st.marks.querySelectorAll('.found').forEach(x => x.remove());
+  for (const ed of EDS) ed.found(null);
   findTicks();
   if (focusText && F.ta) { F.ta.focus(); if (F.i >= 0) F.ta.setSelectionRange(F.hits[F.i], F.hits[F.i] + F.len); }
 }
@@ -2139,20 +2228,18 @@ async function checkOpenFile() {
   if (!S.file || S.file.path !== path) return;
   if (f.hash === S.file.hash) { if (S.conflict?.type === 'deleted') hideBanner(); return; }
   if (!isDirty()) {
-    setFile(f, true); hideBanner();
-    hlEl.classList.remove('flash'); void hlEl.offsetWidth; hlEl.classList.add('flash');
+    setFile(f, true); hideBanner(); flashEditor();
     toast('Reloaded — file changed on disk');
   } else {  // unsaved edits: merge the disk change in when the two touch different lines
     const theirs = f.kind === 'text' || (Plot.source && f.content != null) ? f.content : null;
     const mine = docText();
     const merged = theirs != null ? rebaseEdits(S.file.original, mine, theirs) : null;
     if (merged == null) { if (S.conflict?.disk?.hash !== f.hash) showConflict({ type: 'changed', disk: f }); return; }
-    const a = viewToModel(editor.selectionStart), z = viewToModel(editor.selectionEnd), top = editor.scrollTop;
+    const a = editor.selectionStart, z = editor.selectionEnd, top = editor.scrollTop;
     const shift = merged.length - mine.length, before = mine.slice(0, a) === merged.slice(0, a);  // the change was after the caret
     S.file.original = f.content; S.file.hash = f.hash;
     presentDoc(merged, before ? a : a + shift, before ? z : z + shift, top);
-    histSync(path, merged); hideBanner(); renderHL(true); renderMarks(); updateFileState(); updatePos();
-    hlEl.classList.remove('flash'); void hlEl.offsetWidth; hlEl.classList.add('flash');
+    hideBanner(); renderHL(true); renderMarks(); updateFileState(); updatePos(); updateUndoButtons(); flashEditor();
     toast("Merged the agent's change into your unsaved edits");
   }
 }
@@ -2213,7 +2300,7 @@ const LANGS = {
   md: [['c', /<!--[\s\S]*?-->/], ['s', /^```[\s\S]*?^```|`[^`\n]+`/], ['h', /^#{1,6} .*/], ['k', /\*\*[^*\n]+\*\*|__[^_\n]+__/],
     ['f', /!?\[[^\]\n]*\]\([^)\n]*\)/], ['d', /^\s*(?:[-*+]|\d+\.)(?= )/]],
   tag: [['t', /^<\/?[\w:.-]+|\/?>$/], ['f', /[\w:.@-]+(?=\s*=)/], ['s', any(/"[^"]*"/, /'[^']*'/)]],
-  html: [['c', /<!--[\s\S]*?-->/], ['x', /<script\b[^>]*>[\s\S]*?(?=<\/script>)/, t => embed(t, 'js')], ['x', /<style\b[^>]*>[\s\S]*?(?=<\/style>)/, t => embed(t, 'css')],
+  html: [['c', /<!--[\s\S]*?-->/], ['x', /<script\b[^>]*>[\s\S]*?(?=<\/script>)/, ['embed', 'js']], ['x', /<style\b[^>]*>[\s\S]*?(?=<\/style>)/, ['embed', 'css']],
     ['x', /<\/?[\w:.-]+(?:[^>"']|"[^"]*"|'[^']*')*\/?>/, 'tag'], ['n', /&#?\w+;/]],
   css: [['c', /\/\*[\s\S]*?\*\//], ['s', any(DQ, SQ)], ['k', /@[\w-]+|!important/], ['t', /(?<=[{;]\s*)-{0,2}[\w-]+(?=\s*:)/],
     ['f', /[\w-]+(?=\()/], ['n', /#[\da-fA-F]{3,8}\b|-?\b\d+\.?\d*(?:px|em|rem|vh|vw|ms|s|deg|fr|%)?/]],
@@ -2233,40 +2320,35 @@ function langOf(path) {
 }
 const escH = s => s.replace(/[&<>]/g, c => c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;');
 const HLC = {};
-function hl(text, lang) {
-  const rules = LANGS[lang]; if (!rules) return escH(text);
+function tokens(text, lang, base = 0, out = []) {  // [[from, to, class]] in text order: hl() and the editors' colours
+  const rules = LANGS[lang]; if (!rules) return out;
   const re = HLC[lang] || (HLC[lang] = new RegExp(rules.map(r => '(' + r[1].source + ')').join('|'), 'gm'));
-  let out = '', last = 0, m;
+  let m;
   re.lastIndex = 0;
   while ((m = re.exec(text))) {
     if (!m[0]) { re.lastIndex++; continue; }
     let i = 1; while (m[i] === undefined) i++;
-    const [cls, , sub] = rules[i - 1], at = re.lastIndex;
-    out += escH(text.slice(last, m.index)) + (!sub ? `<span class="t-${cls}">${escH(m[0])}</span>` : typeof sub === 'function' ? sub(m[0]) : hl(m[0], sub));
-    last = re.lastIndex = at;
+    const [cls, , sub] = rules[i - 1], at = re.lastIndex, from = base + m.index;
+    if (!sub) out.push([from, from + m[0].length, cls]);
+    else if (Array.isArray(sub)) {  // ['embed', lang]: the opening tag, then the body in LANG
+      const k = m[0].indexOf('>') + 1;
+      tokens(m[0].slice(0, k), 'tag', from, out); tokens(m[0].slice(k), sub[1], from + k, out);
+    } else tokens(m[0], sub, from, out);
+    re.lastIndex = at;
   }
+  return out;
+}
+function hl(text, lang) {  // TEXT as highlighted HTML (feedback quotes, diffs)
+  let out = '', last = 0;
+  for (const [a, z, cls] of tokens(text, lang)) { out += escH(text.slice(last, a)) + `<span class="t-${cls}">${escH(text.slice(a, z))}</span>`; last = z; }
   return out + escH(text.slice(last));
 }
-function embed(t, lang) { const i = t.indexOf('>') + 1; return hl(t.slice(0, i), 'tag') + hl(t.slice(i), lang); }
-let hlRaf = 0;
-function renderHL(now) {
-  cancelAnimationFrame(hlRaf);
-  const go = () => {
-    const on = !!(S.file && S.file.lang && S.file.kind === 'text' && editor.value.length <= HL_MAX);
-    $('#editwrap').classList.toggle('hl', on);
-    hlEl.innerHTML = on ? hl(editor.value, S.file.lang) + '\n' : '';
-    syncHL();
-  };
-  if (now) go(); else hlRaf = requestAnimationFrame(go);
-}
-function syncHL() {
-  $('#findhl').style.transform = `translate(${-editor.scrollLeft}px, ${-editor.scrollTop}px)`;
-  // wrapped, the copy must wrap at the text box's width: its padding makes room for the box's scrollbar
-  hlEl.style.paddingRight = document.body.classList.contains('wrap') ? (16 + editor.offsetWidth - editor.clientWidth) + 'px' : '';
-  hlEl.scrollTop = editor.scrollTop; hlEl.scrollLeft = editor.scrollLeft;
+function renderHL() { editor.setLang(S.file && S.file.kind === 'text' ? S.file.lang : null); }
+function syncHL() {  // the overlays (change bars, line notes) follow the editor's scroll
   $('#marks').style.transform = `translateY(${-editor.scrollTop}px)`;
   $('#mstack').style.transform = `translateY(${-editor.scrollTop}px)`;
 }
+function flashEditor() { const d = editor.view.dom; d.classList.remove('flash'); void d.offsetWidth; d.classList.add('flash'); }
 
 /* ---------- feedback for the agent ---------- */
 const QUOTE_LINES = 12;
@@ -2286,8 +2368,8 @@ function selLines(ta = editor) {
   if (ta === editor && (!S.file || S.file.kind !== 'text' || S.multi.size > 1)) return null;
   if (!ta || ta.selectionStart === ta.selectionEnd) return null;
   const v = ta === editor ? docText() : ta.value;
-  let s = ta === editor ? viewToModel(ta.selectionStart) : ta.selectionStart;
-  let e = ta === editor ? viewToModel(ta.selectionEnd) : ta.selectionEnd;
+  const s = ta.selectionStart;
+  let e = ta.selectionEnd;
   if (e > s && v[e - 1] === '\n') e--;
   const a = v.slice(0, s).split('\n').length, b = v.slice(0, e).split('\n').length;
   return { lines: [a, b], quote: v.split('\n').slice(a - 1, Math.min(b, a + QUOTE_LINES - 1)).join('\n') };
@@ -2329,21 +2411,7 @@ function updateFbHeader() {
   $('#fball').textContent = n ? `Feedback · ${n} open` : 'Feedback';
   $('#fball').classList.toggle('hot', n > 0);
 }
-let mirror = null;
-function lineBox(ta) {  // (a, b) -> [top, height] of lines a..b in the text box's content, wrapped or not
-  const cs = getComputedStyle(ta), lh = parseFloat(cs.lineHeight), pad = parseFloat(cs.paddingTop);
-  if (!document.body.classList.contains('wrap')) return (a, b) => [pad + (a - 1) * lh, (b - a + 1) * lh];
-  if (!mirror) { mirror = el('div'); mirror.setAttribute('aria-hidden', 'true'); document.body.append(mirror); }
-  Object.assign(mirror.style, { position: 'absolute', visibility: 'hidden', left: '-99999px', top: '0', boxSizing: 'border-box',
-    whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', width: ta.clientWidth + 'px', padding: cs.padding,
-    fontFamily: cs.fontFamily, fontSize: cs.fontSize, lineHeight: cs.lineHeight, tabSize: cs.tabSize });
-  mirror.textContent = '';
-  for (const line of ta.value.split('\n')) mirror.append(el('div', null, line || '\u200b'));
-  return (a, b) => {
-    const A = mirror.children[a - 1], B = mirror.children[Math.min(b, mirror.children.length) - 1];
-    return A && B ? [A.offsetTop, B.offsetTop + B.offsetHeight - A.offsetTop] : [pad + (a - 1) * lh, (b - a + 1) * lh];
-  };
-}
+function lineBox(ta) { return ta.lineBox(); }  // (a, b) -> [top, height] of lines a..b, from the editor's own layout
 function remapEvents(oldText, newText, events) {  // move line ranges from oldText onto newText; dropped lines lose their mark
   if (!events || !events.length || oldText == null || newText == null || oldText === newText) return events || [];
   const d = lineDiff(oldText, newText);
@@ -2466,13 +2534,10 @@ async function jumpTo(p, [a, b]) {
   await goTo(p);
   if (!S.file || S.file.path !== p || S.file.kind !== 'text') return;
   if (Fold.collapsed && a <= Fold.end) { expandFold(); renderHL(true); renderMarks(); }
-  let va = a, vb = b;
-  if (Fold.collapsed) { va -= Fold.end; vb -= Fold.end; }
-  const L = editor.value.split('\n'); let s = 0;
-  for (let i = 0; i < va - 1 && i < L.length; i++) s += L[i].length + 1;
-  let e = s; for (let i = va - 1; i < vb && i < L.length; i++) e += L[i].length + 1;
-  editor.focus(); editor.setSelectionRange(s, Math.max(s, e - 1));
-  editor.scrollTop = Math.max(0, lineBox(editor)(va, vb)[0] - editor.clientHeight / 3);
+  const d = editor.view.state.doc, A = d.line(Math.max(1, Math.min(a, d.lines))), B = d.line(Math.max(1, Math.min(b, d.lines)));
+  editor.focus(); editor.setSelectionRange(A.from, Math.max(A.from, B.to));
+  editor.scrollTop = Math.max(0, lineBox(editor)(a, b)[0] - editor.clientHeight / 3);
+  syncHL();
   updatePos(); updateFbButton();
 }
 async function setFb(id, patch) { try { await api('PUT', '/api/feedback', { id, ...patch }); await loadTree(); } catch (e) { toast(e.message, true); } }
@@ -2975,6 +3040,9 @@ $('#b-rename').onclick = renameSel;
 $('#b-delete').onclick = deleteSel;
 
 /* ---------- misc ui ---------- */
+function typingIn(node) {  // a text field or an editor has the keys
+  return !!node && (/^(TEXTAREA|INPUT)$/.test(node.tagName || '') || !!(node.closest && node.closest('.cm-editor')));
+}
 async function quitApp() {  // Ctrl+W / Ctrl+Q quits the workbench window, or the standalone app
   const unsaved = isDirty() || S.bufs.size > 0 || [...S.msec.values()].some(sDirty);
   if (unsaved && !confirm('Quit with unsaved changes? They will be lost.')) return;
@@ -2991,12 +3059,13 @@ document.addEventListener('keydown', e => {
     if (k === 'q' || (k === 'w' && !inTerm)) { e.preventDefault(); quitApp(); return; }
   }
   if (inTerm) return;  // keys belong to the shell / agent
+  if (e.key === 'Escape' && e.vimMode && e.vimMode !== 'normal') return;  // vim's own Esc: back to normal mode
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
     e.preventDefault();
-    const st = document.activeElement && document.activeElement._st;
+    const ed = document.activeElement && document.activeElement._ed, st = ed && ed.st;
     if (st) saveSection(st, !!st.conflict); else save(!!S.conflict);
   }
-  if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'f' && !/^(TEXTAREA|INPUT)$/.test(document.activeElement?.tagName || '')) {
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'f' && !typingIn(document.activeElement)) {
     const ta = S.multi.size > 1 ? (S.lastSec && S.lastSec.ta) : (S.file && S.file.kind === 'text' ? editor : null);
     if (ta) { e.preventDefault(); openFind(ta); return; }
   }
@@ -3005,7 +3074,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && focusOn && !$('#modal').open && $('#treemenu').hidden && !modePop) { e.preventDefault(); setFocus(false); return; }
   if (e.key === 'Escape' && S.hitsOn && !$('#modal').open) { closeSearch(true); return; }
   if (e.key === 'Escape' && S.multi.size && !$('#modal').open) clearMulti();
-  if (e.key === 'F2' && !/^(TEXTAREA|INPUT)$/.test(document.activeElement?.tagName || '')) renameSel();
+  if (e.key === 'F2' && !typingIn(document.activeElement)) renameSel();
 });
 window.addEventListener('beforeunload', e => {
   if (isDirty() || S.bufs.size || [...S.msec.values()].some(sDirty)) { e.preventDefault(); e.returnValue = ''; }
@@ -3166,6 +3235,22 @@ function setFocus(on) {
   $('#b-focus').setAttribute('aria-pressed', String(focusOn));
 }
 $('#b-focus').onclick = () => setFocus(!focusOn);
+/* vim keys: off by default, remembered in this browser; :w saves, :wa saves every open file */
+function setVim(on) {
+  VIM = !!on; store('vim', VIM);
+  $('#b-vim').setAttribute('aria-pressed', String(VIM));
+  for (const ed of EDS) ed.sync();
+}
+$('#b-vim').onclick = () => { setVim(!VIM); toast(VIM ? 'Vim keys on (:w saves)' : 'Vim keys off'); editor.focus(); };
+CMX.Vim.defineEx('write', 'w', cm => {
+  const ed = edOf(cm.cm6);
+  if (ed && ed.st) saveSection(ed.st, !!ed.st.conflict); else save(!!S.conflict);
+});
+CMX.Vim.defineEx('wall', 'wa', () => {
+  if (isDirty()) save(!!S.conflict);
+  for (const st of S.msec.values()) if (sDirty(st)) saveSection(st);
+});
+setVim(VIM);
 $('#focusveil').onclick = () => setFocus(false);
 function setTheme(name) {  // the workbench decides (postMessage); alone, the ?theme= or the system
   const t = THEMES.includes(name) ? name : 'system';
@@ -3419,6 +3504,7 @@ $('#srcpull').onclick = async () => {
 $('#srcgather').onclick = async () => {
   try {
     const r = await api('POST', '/api/sources/gather', {});
+    REFS.at = 0;  // completion reads the new refs.yml
     if (r.errors && r.errors.length) toast(r.errors[0], true);
     else if (r.stray && r.stray.length) toast(`Wrote ${r.ref}. Not read, in the wrong place: ${r.stray.join(', ')}`, true);
     else toast('Wrote ' + (r.ref || 'nothing') + ' (the case\'s one citation file)');
@@ -3640,7 +3726,7 @@ function pvSendBuffer(force) {
 function pvScroll() {
   const ws = W.pv.ws;
   if (!W.panes.preview || document.hidden || W.pv.sendT || !ws || ws.compiling || ws.readyState !== 1 || !S.file || S.file.path !== W.pv.path) return;
-  const v = docText().slice(0, viewToModel(editor.selectionStart));
+  const v = docText().slice(0, editor.selectionStart);
   ws.send(JSON.stringify({ event: 'panelScrollTo', filepath: absPath(S.file.path), line: v.split('\n').length - 1, character: v.length - v.lastIndexOf('\n') - 1 }));
 }
 function mdSend() {

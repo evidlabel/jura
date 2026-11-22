@@ -816,6 +816,15 @@ def call(base, method, path, body=None):
         return e.code, json.loads(e.read())
 
 
+def test_refs_route(write_server, case):
+    s, r = call(write_server, "GET", "/api/refs")
+    assert s == 200 and r == {"refs": []}
+    (case / "refs").mkdir()
+    (case / "refs" / "refs.yml").write_text("0001:dolor:\n  type: article\n  title: Lorem\n", "utf-8")
+    s, r = call(write_server, "GET", "/api/refs")
+    assert r["refs"] == [{"key": "0001:dolor", "title": "Lorem", "url": ""}]
+
+
 def test_routes(write_server, case):
     s, wb = call(write_server, "GET", "/api/wb")
     assert s == 200 and wb["case"]["id"] == "2026-014" and wb["case"]["evidSet"] == "2026-014-anon"

@@ -27,6 +27,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -836,3 +837,86 @@ def gather(workdir: Path) -> dict:
             errors.append(f"merge: {e}")
             return {"ref": "", "errors": errors, "stray": stray}
     return {"ref": REFS, "errors": errors, "stray": stray}
+
+
+_KEY_RE = re.compile(r"^(?![\s#-])(.+?):\s*$")
+_FIELD_RE = re.compile(r"^  (title|url):\s*(.*)$")
+_ref_cache: dict[Path, tuple[float, int, list[dict]]] = {}
+
+
+def _yaml_scalar(raw: str, more: list[str]) -> str:
+    """One plain, quoted or block scalar (``|-`` / ``>-`` with its indented lines), as text."""
+    raw = raw.strip()
+    if raw[:1] in "|>":
+        return (" " if raw[0] == ">" else "\n").join(m.strip() for m in more).strip()
+    parts = [raw, *(m.strip() for m in more)]  # a long scalar folded onto indented lines
+    raw = parts[0]
+    for nxt in parts[1:]:  # in double quotes a trailing backslash escapes the line break
+        raw = raw[:-1] + nxt if raw.startswith('"') and raw.endswith("\\") else raw + " " + nxt
+    if len(raw) >= 2 and raw[0] == raw[-1] == "'":
+        return raw[1:-1].replace("''", "'")
+    if len(raw) >= 2 and raw[0] == raw[-1] == '"':
+        return _DQ_ESC.sub(_dq_unescape, raw[1:-1])
+    return raw
+
+
+_DQ_ESC = re.compile(r"\\(x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|.)")
+_DQ_CHAR = {"n": "\n", "t": "\t", "r": "\r", "0": "\0", "a": "\a", "b": "\b", "e": "\x1b", "f": "\f", "v": "\v",
+            "N": "\x85", "_": "\xa0", "L": "\u2028", "P": "\u2029", " ": " ", "\t": "\t"}
+
+
+def _dq_unescape(m: re.Match) -> str:
+    """One YAML double-quoted escape (``\\n``, ``\\ ``, ``\\x41``, ``\\u00e6``, …)."""
+    e = m.group(1)
+    if len(e) > 1:
+        return chr(int(e[1:], 16))
+    return _DQ_CHAR.get(e, e)  # \\ \" \/ and anything unknown: the character itself
+
+
+def ref_keys(workdir: Path) -> list[dict]:
+    """``[{key, title, url}]`` for every entry of ``refs/refs.yml``, for the editor's labquote completion.
+
+    Read without a YAML library: gather writes top-level keys with two-space fields, so the keys and
+    their own ``title:`` / ``url:`` lines (not a ``parent:``'s) are all it needs. Cached by mtime.
+    """
+    f = workdir / REFS
+    try:
+        st = f.stat()
+    except OSError:
+        return []
+    hit = _ref_cache.get(f)
+    if hit and hit[0] == st.st_mtime and hit[1] == st.st_size:
+        return hit[2]
+    try:
+        lines = f.read_text("utf-8", errors="replace").splitlines()
+    except OSError:
+        return []
+    out: list[dict] = []
+    cur: dict | None = None
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        m = _KEY_RE.match(line)
+        if m:
+            key = m.group(1).strip()
+            if len(key) >= 2 and key[0] == key[-1] and key[0] in "'\"":
+                key = key[1:-1]
+            cur = {"key": key, "title": "", "url": ""}
+            out.append(cur)
+            i += 1
+            continue
+        fm = _FIELD_RE.match(line) if cur is not None else None
+        if fm:
+            more = []
+            while i + 1 < len(lines) and (lines[i + 1].startswith("   ") or not lines[i + 1].strip()):
+                if lines[i + 1].strip():
+                    more.append(lines[i + 1])
+                i += 1
+            val = _yaml_scalar(fm.group(2), more)
+            if fm.group(1) == "title":  # one line, short: it is a hint beside the key
+                val = " ".join(val.split())
+                val = val if len(val) <= 160 else val[:159] + "…"
+            cur[fm.group(1)] = val
+        i += 1
+    _ref_cache[f] = (st.st_mtime, st.st_size, out)
+    return out

@@ -50,6 +50,10 @@ def test_page_and_vendor(server):
     assert 'id="b-focus"' in page and 'id="focusveil"' in page
     assert "if (CFG.term && !T.open) openTerm(true)" not in page
     assert call(server, "GET", "/vendor/xterm.js")[0] == 200
+    status, cm = call(server, "GET", "/vendor/codemirror.min.js")
+    assert status == 200 and "window.CM" in cm  # the editor bundle, served locally
+    assert '<script src="/vendor/codemirror.min.js"></script>' in page and 'id="b-vim"' in page
+    assert '<textarea id="editor"' not in page
     assert call(server, "GET", "/logo.svg")[1].startswith("<svg")
     assert call(server, "GET", "/vendor/nope.js")[0] == 404
 

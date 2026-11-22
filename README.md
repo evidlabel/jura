@@ -15,7 +15,7 @@ Write agent · Datasets app · Anonymization app
 
 | Tab | What it is |
 |---|---|
-| **Write** `agent` | The case workdir as a tree you edit and annotate, a wrapped Typst editor with a tinymist preview beside it, and a stack of agents and terminals. The agents pane stays closed until you open a harness. Every change is committed in the background. |
+| **Write** `agent` | The case workdir as a tree you edit and annotate, a wrapped Typst editor (CodeMirror, with optional **Vim** keys) with a tinymist preview beside it, and a stack of agents and terminals. The agents pane stays closed until you open a harness. Every change is committed in the background. |
 | **Datasets** `app` | evid: documents, labels, search, over the global evid store, plus the case's own `evid/`. Its Agent button opens a harness on one set; those terminals run in the case sandbox too. |
 | **Anonymization** `app` | did: create sets and add documents. The files stay outside the case, under `~/did_workdirs`. Write connects to those sets. |
 
@@ -139,7 +139,7 @@ jura write -h         # the Write tab's own CLI: notes, feedback, the user's edi
 
 ## Credits
 
-The Write tab is a fork of [wr1/treedit](https://github.com/wr1/treedit) at `94e6806` (MIT, © 2026 wr1). See `src/workbench/write/LICENSE-treedit.txt`; every forked file says so in its header. The window shell is adapted from evid-app. It bundles xterm.js (MIT), Source Sans 3, Source Serif 4 and JetBrains Mono (OFL).
+The Write tab is a fork of [wr1/treedit](https://github.com/wr1/treedit) at `94e6806` (MIT, © 2026 wr1). See `src/workbench/write/LICENSE-treedit.txt`; every forked file says so in its header. The window shell is adapted from evid-app. It bundles xterm.js (MIT), CodeMirror 6 and codemirror-vim (MIT), Source Sans 3, Source Serif 4 and JetBrains Mono (OFL).
 
 ## License
 
@@ -155,5 +155,7 @@ flowchart LR
   Question --> Sources --> Memo --> Decision
 ```
 ````
+
+The editor is CodeMirror 6, bundled locally (`make vendor-cm` rebuilds it from `tools/codemirror/`). Each file keeps its own undo history while you switch between files; a reload or merge from disk is one undo step. **Vim** in the editor bar turns on vim keys (`:w` saves, `:wa` saves every open file); Esc goes back to normal mode first, and leaves Focus only from normal mode. In a `.typ` file, typing inside `#blockq("`, `#inlineq("` or `#cite-ref("` offers the keys of `refs/refs.yml` with their titles (Ctrl+Space asks again); **Gather** refreshes them.
 
 Typst preview defaults to **On save**, which keeps large bibliographies out of the typing path. Use **Refresh** to preview unsaved text, or choose **After typing** for automatic updates after a pause. The refresh preference is saved in this browser.
