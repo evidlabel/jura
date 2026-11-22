@@ -1,0 +1,21 @@
+{
+  "name": "workbench-codemirror-bundle",
+  "private": true,
+  "description": "Builds src/workbench/write/vendor/codemirror.min.js (make vendor-cm). Not shipped.",
+  "license": "MIT",
+  "scripts": {
+    "build": "esbuild entry.mjs --bundle --minify --format=iife --target=es2020 --legal-comments=none --outfile=../../src/workbench/write/vendor/codemirror.min.js"
+  },
+  "dependencies": {
+    "@codemirror/autocomplete": "6.20.4",
+    "@codemirror/commands": "6.11.1",
+    "@codemirror/language": "6.13.1",
+    "@codemirror/search": "6.7.2",
+    "@codemirror/state": "6.7.6",
+    "@codemirror/view": "6.43.15",
+    "@replit/codemirror-vim": "6.4.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

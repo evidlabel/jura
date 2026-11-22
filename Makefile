@@ -9,7 +9,7 @@ APP_PC := webkit2gtk-4.1 javascriptcoregtk-4.1 libsoup-3.0 gtk+-3.0 dbus-1
 APP_DEPS := libdbus-1-dev libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev librsvg2-dev libssl-dev build-essential pkg-config
 TINYMIST_VERSION := 0.15.8
 
-.PHONY: help sync test fmt lint gui web app-build app-deps tool deps skill
+.PHONY: help sync test fmt lint gui web app-build app-deps tool deps skill vendor-cm
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -46,6 +46,9 @@ tool: app-build ## Install `jura` as a uv tool from this checkout, and workbench
 	uv tool install --force --editable .
 	install -m 755 app/target/release/workbench-app $(HOME)/.local/bin/workbench-app
 	ln -sf jura $(HOME)/.local/bin/workbench  # old name, for cases whose AGENTS.md still says `workbench`
+
+vendor-cm: ## Rebuild the Write editor bundle vendor/codemirror.min.js from tools/codemirror (needs npm)
+	cd tools/codemirror && npm ci --no-audit --no-fund && npm run build
 
 deps: ## Install tinymist $(TINYMIST_VERSION) into ~/.local/bin (the Write tab's Typst preview)
 	curl -fsSL -o /tmp/tinymist.tar.gz https://github.com/Myriad-Dreamin/tinymist/releases/download/v$(TINYMIST_VERSION)/tinymist-x86_64-unknown-linux-gnu.tar.gz

@@ -1942,6 +1942,7 @@ VENDOR = {
     "xterm.js": "text/javascript; charset=utf-8",
     "xterm.css": "text/css; charset=utf-8",
     "addon-fit.js": "text/javascript; charset=utf-8",
+    "codemirror.min.js": "text/javascript; charset=utf-8",
 }
 PAGE = (resources.files(__package__) / "page.html").read_text("utf-8")
 
