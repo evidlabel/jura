@@ -3,10 +3,12 @@
 #
 # Refuses unless: on main, no uncommitted changes, not behind origin/main, the tag is new,
 # and lint + tests pass. The version lives in pyproject.toml, src/workbench/__init__.py,
-# the README's two "running release" lines and uv.lock. Nothing leaves the machine until
+# the README's two "running release" lines and uv.lock, and as semver (0.3.1a1 ->
+# 0.3.1-alpha.1) in the window: app/Cargo.toml, app/tauri.conf.json, app/Cargo.lock.
+# Pushing the tag builds that window (.github/workflows/app.yml) and attaches it to the
+# release, which is where jura setup fetches it: one tag, one version, by design. Nothing leaves the machine until
 # you answer y; answering n leaves the commit and tag local (push them later, or undo with
 # `git tag -d vX && git reset --hard HEAD~1`).
-# The workbench-app window has its own tags (app-v*), built by .github/workflows/app.yml.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -34,13 +36,20 @@ sed -i "s/^version = \"$old\"/version = \"$new\"/" pyproject.toml
 sed -i "s/^__version__ = \"$old\"/__version__ = \"$new\"/" src/workbench/__init__.py
 sed -i "/running release\|^jura\.sh /s/$old/$new/" README.md
 uv lock -q
+app_new="$(.venv/bin/python -c "from workbench.setup import app_version; print(app_version('$new'))")"
+sed -i "0,/^version = \".*\"/s//version = \"$app_new\"/" app/Cargo.toml
+sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$app_new\"/" app/tauri.conf.json
+sed -i "/^name = \"workbench-app\"\$/{n;s/^version = \".*\"/version = \"$app_new\"/}" app/Cargo.lock
 grep -q "version = \"$new\"" pyproject.toml && grep -q "\"$new\"" src/workbench/__init__.py \
-  && [ "$(grep -c "$new" README.md)" -ge 2 ] || die "the version did not land everywhere: see git diff"
+  && [ "$(grep -c "$new" README.md)" -ge 2 ] \
+  && grep -q "^version = \"$app_new\"" app/Cargo.toml && grep -q "\"version\": \"$app_new\"" app/tauri.conf.json \
+  && grep -A1 '^name = "workbench-app"$' app/Cargo.lock | grep -q "\"$app_new\"" \
+  || die "the version did not land everywhere: see git diff"
 
-git add pyproject.toml src/workbench/__init__.py README.md uv.lock
+git add pyproject.toml src/workbench/__init__.py README.md uv.lock app/Cargo.toml app/tauri.conf.json app/Cargo.lock
 git commit -q -m "release $new"
 git tag "v$new"
-echo "release: committed and tagged v$new"
+echo "release: committed and tagged v$new (window $app_new)"
 git --no-pager log --oneline -1
 
 read -r -p "Push main and v$new to origin? [y/N] " ok

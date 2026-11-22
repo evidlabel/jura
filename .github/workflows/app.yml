@@ -1,11 +1,14 @@
-# The workbench-app window (Tauri): build on an app-v* tag and attach the binaries
-# that `jura setup` downloads. Each tar.xz holds the bare `workbench-app` binary —
-# setup's fetch() unpacks the member named after the tool into ~/.local/bin.
+# The workbench-app window (Tauri), built for every workbench release: on the release tag
+# v<version> (what `make release` pushes) the binaries are attached to that release, which
+# is where `jura setup` fetches the window for its own version. One tag, one version: the
+# job refuses a tag the window's version (app/Cargo.toml, bumped by make release) does not
+# match. Each tar.xz holds the bare `workbench-app` binary — setup's fetch() unpacks the
+# member named after the tool into ~/.local/bin.
 name: app
 on:
   push:
     tags:
-      - "app-v*"
+      - "v*"
 permissions:
   contents: write
 jobs:
@@ -20,6 +23,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      - name: The window is built for this release
+        run: |
+          want="$(echo "${GITHUB_REF_NAME#v}" | sed -E 's/a([0-9]+)$/-alpha.\1/; s/b([0-9]+)$/-beta.\1/; s/rc([0-9]+)$/-rc.\1/')"
+          have="$(sed -n 's/^version = "\(.*\)"/\1/p' app/Cargo.toml | head -1)"
+          echo "tag $GITHUB_REF_NAME -> window $want; app/Cargo.toml says $have"
+          [ "$have" = "$want" ]
       - name: Rust
         run: |
           curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
@@ -38,5 +47,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" --title "workbench-app $GITHUB_REF_NAME" --notes "The native window. \`jura setup\` downloads the binary for your architecture; the webkit2gtk-4.1 runtime libraries are asked for separately (sudo)." --verify-tag 2>/dev/null || true
+          gh release create "$GITHUB_REF_NAME" --title "jura workbench $GITHUB_REF_NAME" --notes "jura workbench $GITHUB_REF_NAME, with its native window (workbench-app) for each architecture. \`jura setup\` downloads the one for your workbench version; the webkit2gtk-4.1 runtime libraries are asked for separately (sudo)." --verify-tag 2>/dev/null || true
           gh release upload "$GITHUB_REF_NAME" "app/target/release/workbench-app-${{ matrix.arch }}.tar.xz" --clobber

@@ -3,6 +3,8 @@
 //!     workbench-app --url URL [--raise-file PATH]   # show a running workbench server (what `jura open` does)
 //!     workbench-app                                 # start `jura open --headless` itself and stop it
 //!                                                   # when the window closes (WORKBENCH_BIN overrides `jura`)
+//!     workbench-app --version                       # `workbench-app <version>`: the workbench release it
+//!                                                   # was built for (jura setup and doctor compare it)
 //!
 //! Touching the raise file brings the window to the front.
 //!
@@ -131,6 +133,11 @@ fn mtime(p: &PathBuf) -> Option<SystemTime> {
 }
 
 fn main() {
+    // Before anything else: setup and doctor ask this, and it must never start a workbench.
+    if std::env::args().nth(1).as_deref() == Some("--version") {
+        println!("workbench-app {}", env!("CARGO_PKG_VERSION"));
+        return;
+    }
     // WebKitGTK 2.52 on Intel/Wayland. With GPU rasterization, the DMA-BUF renderer has crashed
     // the web process (a libc segfault, later "free(): corrupted unsorted chunks"). Without
     // DMA-BUF, every frame of the window goes through the CPU, and typing lagged badly once the

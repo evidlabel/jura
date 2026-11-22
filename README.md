@@ -91,7 +91,8 @@ That installs uv if it is missing, then evid, did and the workbench as uv tools,
 `jura setup`. Setup installs what is still missing and asks before each step: `typst` and
 `tinymist` (live preview) into `~/.local/bin`, `git` and `bwrap` (bubblewrap) with your
 package manager (sudo, asked separately), optionally poppler (`pdftotext`, did's fallback
-for broken PDF text), and did's language models. Agent harnesses
+for broken PDF text), the app window (`workbench-app`, built for each workbench release; setup fetches the one
+for your version and replaces one built for another), and did's language models. Agent harnesses
 (`claude`, `codex`, `grok`, `opencode`, …) for the Write terminals are your own install.
 
 By hand:

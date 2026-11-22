@@ -118,6 +118,14 @@ def _doctor_table() -> bool:
             print(f"    {t.problem}")
     for name, without in requires.OPTIONAL.items():
         path = found[name]()
+        if name == "workbench-app" and path:  # built for one workbench release: it must be this one
+            from .setup import app_version, installed_app_version
+
+            have, want = installed_app_version(path), app_version()
+            print(f"{'ok' if have == want else '!!'}  {name:<14} {have or '-':<8} {path}")
+            if have != want:
+                print(f"    built for {have or 'an older workbench (no version)'}, this workbench is {want}: jura setup replaces it")
+            continue
         print(f"{'ok' if path else '--'}  {name:<14} {'-':<8} {path or f'not found ({without})'}")
     for name, without in requires.SOURCES.items():  # optional, but a stale one is named
         t = requires.check(name)

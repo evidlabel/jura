@@ -1,11 +1,16 @@
 """``jura setup``'s plan, and the case templates. Nothing here installs or downloads."""
 
+import json
+import re
 import shutil
 import subprocess
+from pathlib import Path
 
 import pytest
 
-from workbench import cases, setup, templates
+from workbench import __version__, cases, setup, templates
+
+APP = Path(__file__).resolve().parents[2] / "app"
 
 
 @pytest.fixture(autouse=True)
@@ -26,8 +31,61 @@ def test_plan_nothing_missing():
 def test_plan_app_download_step():
     (app,) = setup.plan({}, uv=True, manager="", arch="x86_64", tinymist=False, app=True)
     assert app.tool == "workbench-app" and not app.sudo
-    assert app.url == f"https://github.com/evidlabel/jura/releases/download/app-v{setup.APP}/workbench-app-x86_64.tar.xz"
-    assert "make app-build" in app.what
+    assert app.url == f"https://github.com/evidlabel/jura/releases/download/v{__version__}/workbench-app-x86_64.tar.xz"
+    assert "make app-build" in app.what and setup.app_version() in app.what
+
+
+def test_app_version_is_the_workbench_version_as_semver():
+    assert setup.app_version("0.3.1a1") == "0.3.1-alpha.1"
+    assert setup.app_version("1.0.0b2") == "1.0.0-beta.2"
+    assert setup.app_version("1.0.0rc1") == "1.0.0-rc.1"
+    assert setup.app_version("1.0.0") == "1.0.0"
+
+
+def test_window_is_versioned_with_the_workbench():
+    """make release bumps them together; the release tag builds that window for jura setup."""
+    want = setup.app_version()
+    cargo = re.search(r'^version = "(.*)"', (APP / "Cargo.toml").read_text(), re.M).group(1)
+    lock = re.search(r'^name = "workbench-app"\nversion = "(.*)"', (APP / "Cargo.lock").read_text(), re.M).group(1)
+    tauri = json.loads((APP / "tauri.conf.json").read_text())["version"]
+    assert cargo == lock == tauri == want
+
+
+def fake_exe(path, body):
+    path.write_text("#!/bin/sh\n" + body + "\n")
+    path.chmod(0o755)
+    return str(path)
+
+
+def test_installed_app_version(tmp_path):
+    assert setup.installed_app_version(fake_exe(tmp_path / "new", 'echo "workbench-app 0.3.1-alpha.1"')) == "0.3.1-alpha.1"
+    # a window from before --version starts a workbench: WORKBENCH_BIN=false makes it exit at once
+    old = fake_exe(tmp_path / "old", '[ "$WORKBENCH_BIN" = false ] && exit 1; echo 0.3.0a1')
+    assert setup.installed_app_version(old) == ""
+    assert setup.installed_app_version(str(tmp_path / "missing")) == ""
+
+
+def test_plan_app_replacing_a_stale_window():
+    (app,) = setup.plan({}, uv=True, manager="", arch="x86_64", tinymist=False, app=True, app_stale=True, app_have="0.1.0-alpha.1")
+    assert app.url.endswith(f"/v{__version__}/workbench-app-x86_64.tar.xz")
+    assert "0.1.0-alpha.1 → " + setup.app_version() in app.what
+
+
+@pytest.mark.parametrize("where, have, replaced", [("bin", "0.1.0-alpha.1", True), ("bin", "", True), ("bin", None, False), ("elsewhere", "0.1.0-alpha.1", False)])
+def test_setup_replaces_only_its_own_stale_window(monkeypatch, tmp_path, where, have, replaced):
+    ran = []
+    monkeypatch.setattr(setup, "bin_dir", lambda: tmp_path / "bin")
+    exe = (tmp_path / "bin" if where == "bin" else tmp_path / "build") / "workbench-app"
+    monkeypatch.setattr("workbench.server.find_app", lambda: str(exe))
+    monkeypatch.setattr(setup, "installed_app_version", lambda e: setup.app_version() if have is None else have)
+    monkeypatch.setattr(setup, "_missing", lambda: {})
+    monkeypatch.setattr(setup, "package_manager", lambda: "apt-get")
+    monkeypatch.setattr(setup.requires, "check", lambda n: type("T", (), {"problem": "x"})())
+    monkeypatch.setattr(setup, "_do", ran.append)
+    monkeypatch.setattr(setup, "webkit_runtime", lambda: False)
+    monkeypatch.setattr("workbench.write.preview.find_tinymist", lambda: "/x/tinymist")
+    setup.run(yes=True)
+    assert [s.tool for s in ran] == (["workbench-app"] if replaced else [])
 
 
 def test_plan_app_unknown_arch_advises():

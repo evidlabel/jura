@@ -9,10 +9,12 @@ already installed is replaced, except evid or did older than this workbench need
 - git, bwrap: the distribution's package manager (sudo).
 - typst, tinymist: a pinned release binary into ``~/.local/bin`` (no sudo).
 - pdftotext (poppler), optional: the package manager (sudo).
-- workbench-app, optional: a pinned release binary into ``~/.local/bin`` (no sudo) —
-  the native Tauri window; the webkit2gtk runtime libraries it links against are a
-  separate sudo step, asked for on their own. Without it the browser is the window;
-  building from source is ``make app-deps && make app-build`` (a checkout with cargo).
+- workbench-app, optional: the native Tauri window, into ``~/.local/bin`` (no sudo). It is
+  built for each workbench release and attached to that release (tag ``v<version>``), so
+  setup fetches the one for this workbench's version, and replaces one in ``~/.local/bin``
+  built for another. The webkit2gtk runtime libraries it links against are a separate sudo
+  step, asked for on their own. Without it the browser is the window; building from source
+  is ``make app-deps && make app-build`` (a checkout with cargo).
 - did's language models: ``did models <languages>``.
 - Agent harnesses are only reported: logging in to one is the user's.
 """
@@ -23,6 +25,7 @@ import io
 import lzma
 import os
 import platform
+import re
 import shlex
 import shutil
 import subprocess
@@ -33,7 +36,7 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import agents, requires
+from . import __version__, agents, requires
 
 START = "https://jura.sh/start/"
 UV_SOURCES = {  # the same lines as the install steps on jura.sh
@@ -45,7 +48,8 @@ UV_SOURCES = {  # the same lines as the install steps on jura.sh
 }
 TYPST = "0.13.1"  # as in CI
 TINYMIST = "0.15.8"
-APP = "0.1.0-alpha.1"  # the workbench-app release: tag app-v{APP} on this repo
+APP_URL = "https://github.com/evidlabel/jura/releases/download/v{version}/workbench-app-{arch}.tar.xz"
+_PRE = {"a": "alpha", "b": "beta", "rc": "rc"}
 ARCH = {"x86_64": ("x86_64", "x64"), "aarch64": ("aarch64", "arm64"), "arm64": ("aarch64", "arm64")}
 PACKAGES = {"git": "git", "bwrap": "bubblewrap"}  # the same name on every manager below
 POPPLER = {"apt-get": "poppler-utils", "dnf": "poppler-utils", "pacman": "poppler", "zypper": "poppler-tools"}  # pdftotext
@@ -82,6 +86,29 @@ class Step:
         return f"download {self.url} into ~/.local/bin" if self.url else ""
 
 
+def app_version(version: str = __version__) -> str:
+    """The workbench version as the window's (Cargo, semver) version: 0.3.1a1 -> 0.3.1-alpha.1.
+    The window is built for exactly one workbench release, so the two always match."""
+    m = re.fullmatch(r"(\d+\.\d+\.\d+)(?:(a|b|rc)(\d+))?", version)
+    if not m:
+        return version
+    base, pre, n = m.groups()
+    return f"{base}-{_PRE[pre]}.{n}" if pre else base
+
+
+def installed_app_version(exe: str) -> str:
+    """The version EXE says it was built for (``workbench-app <version>``), or "". A window from
+    before 0.3.1a1 has no --version: it would start a workbench with that flag, so it runs with
+    WORKBENCH_BIN=false, which makes it exit at once (and its version reads as unknown)."""
+    try:
+        r = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=20,
+                           env={**os.environ, "WORKBENCH_BIN": "false"})
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    m = re.fullmatch(r"workbench-app (\S+)", r.stdout.strip())
+    return m.group(1) if r.returncode == 0 and m else ""
+
+
 def package_manager() -> str:
     return next((m for m in MANAGERS if shutil.which(m)), "")
 
@@ -96,11 +123,14 @@ def plan(
     poppler: bool = False,
     app: bool = False,
     webkit: bool = False,
+    app_stale: bool = False,
+    app_have: str = "",
     languages: tuple[str, ...] = (),
 ) -> list[Step]:
     """The steps for MISSING ({tool: problem}, as requires.check reports it), in the order they run.
-    TINYMIST, POPPLER: whether those optional tools are missing. APP: workbench-app is missing;
-    WEBKIT: the runtime libraries the app links against are (then a sudo step before the download).
+    TINYMIST, POPPLER: whether those optional tools are missing. APP: workbench-app is to be installed;
+    APP_STALE: it replaces one built for another version (APP_HAVE, "" when unknown); WEBKIT: the runtime
+    libraries the app links against are missing (then a sudo step before the download).
     LANGUAGES: did models to fetch."""
     steps: list[Step] = []
     for name, src in UV_SOURCES.items():
@@ -133,8 +163,12 @@ def plan(
                     steps.append(Step("webkit2gtk runtime", "the libraries the app window links against, with sudo", ("sudo", *MANAGERS[manager], *RUNTIME[manager]), sudo=True))
                 else:
                     steps.append(Step("webkit2gtk runtime", "optional: install the webkit2gtk-4.1 runtime libraries with your distribution's package manager"))
-            url = f"https://github.com/evidlabel/jura/releases/download/app-v{APP}/workbench-app-{typst_arch}.tar.xz"
-            steps.append(Step("workbench-app", f"workbench-app {APP}, optional: the native window (else the browser); or build from source: make app-deps && make app-build", url=url))
+            url = APP_URL.format(version=__version__, arch=typst_arch)
+            if app_stale:
+                what = f"workbench-app {app_have or '(no version: from before 0.3.1a1)'} → {app_version()}: the window for this workbench"
+            else:
+                what = f"workbench-app {app_version()}, optional: the native window (else the browser)"
+            steps.append(Step("workbench-app", f"{what}; or build from source: make app-deps && make app-build", url=url))
         else:
             steps.append(Step("workbench-app", f"no workbench-app release for {arch}: the browser is the window. Build from source: make app-deps && make app-build"))
     if poppler and manager:
@@ -196,7 +230,11 @@ def run(yes: bool = False, dry_run: bool = False, languages: str = "") -> None:
     if hasattr(sys.stdout, "reconfigure"):  # piped (curl | sh): keep our lines in order with the steps' output
         sys.stdout.reconfigure(line_buffering=True)
     missing = _missing()
-    app_missing = find_app() is None
+    app_path = find_app()
+    app_have = installed_app_version(app_path) if app_path else ""
+    # only a window setup put in ~/.local/bin is replaced; one from WORKBENCH_APP or a build is the user's
+    app_stale = bool(app_path) and Path(app_path).parent == bin_dir() and app_have != app_version()
+    app_missing = app_path is None or app_stale
     langs = tuple(languages.split()) if languages else LANGUAGES
     steps = plan(
         missing,
@@ -207,6 +245,8 @@ def run(yes: bool = False, dry_run: bool = False, languages: str = "") -> None:
         poppler=shutil.which("pdftotext") is None or shutil.which("pdftoppm") is None,
         app=app_missing,
         webkit=webkit_runtime() if app_missing else False,
+        app_stale=app_stale,
+        app_have=app_have,
     )
     print("jura setup: " + ("everything the workbench needs is installed." if not missing and not app_missing else f"{len(missing) + app_missing} tool(s) to install or update."))
     for step in steps:
