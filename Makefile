@@ -28,10 +28,12 @@ fmt: ## Format and fix imports in workbench's own modules (the treedit fork keep
 lint: ## Lint
 	.venv/bin/ruff check src tests
 
-gui: ## Open the workbench (builds workbench-app first when the Tauri libs are present)
+gui: ## Open the workbench in the workbench-app built here (built first when the Tauri libs are present)
 	@if pkg-config --exists $(APP_PC); then cargo build -q --release --manifest-path app/Cargo.toml; \
 	else echo "Tauri libraries missing (make app-deps) — using the browser"; fi
-	.venv/bin/jura open
+	@# this build, not a workbench-app on PATH (jura setup's pinned release)
+	@if [ -x app/target/release/workbench-app ]; then WORKBENCH_APP=$(CURDIR)/app/target/release/workbench-app .venv/bin/jura open; \
+	else .venv/bin/jura open; fi
 
 web: ## Open the workbench in the browser
 	.venv/bin/jura open --browser

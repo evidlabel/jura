@@ -7,8 +7,8 @@
 //! Touching the raise file brings the window to the front.
 //!
 //! On Linux the window reloads the page when WebKit's web process dies (a renderer crash used to
-//! leave it blank), and renders without WebKit's DMA-BUF path by default, which crashed that
-//! process on Intel/Wayland. `WORKBENCH_WEBKIT_DMABUF=1` asks for the accelerated path again.
+//! leave it blank). It renders through WebKit's DMA-BUF path with CPU rasterization by default:
+//! `WORKBENCH_WEBKIT_DMABUF=1` rasterizes on the GPU too, `=0` turns DMA-BUF off (see main).
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::net::{TcpListener, TcpStream};
@@ -131,13 +131,23 @@ fn mtime(p: &PathBuf) -> Option<SystemTime> {
 }
 
 fn main() {
-    // WebKitGTK 2.52's DMA-BUF renderer has crashed this web process on Intel/Wayland: a libc
-    // segfault first, later "free(): corrupted unsorted chunks", and the window goes blank.
-    // Render through the plain path unless WORKBENCH_WEBKIT_DMABUF asks for the accelerated one.
+    // WebKitGTK 2.52 on Intel/Wayland. With GPU rasterization, the DMA-BUF renderer has crashed
+    // the web process (a libc segfault, later "free(): corrupted unsorted chunks"). Without
+    // DMA-BUF, every frame of the window goes through the CPU, and typing lagged badly once the
+    // Typst preview was open. Measured 2026-11-22 on a 3072 px (DPR 2) window, keystroke to
+    // frame, p50 / worst: no DMA-BUF 135 / 238 ms; DMA-BUF with CPU rasterization 37 / 91 ms;
+    // DMA-BUF on the GPU 33 / 206 ms. WORKBENCH_WEBKIT_DMABUF picks: unset = DMA-BUF with CPU
+    // (Skia) rasterization, 1 = DMA-BUF on the GPU, 0 = no DMA-BUF (the old default).
     // Set before GTK or WebKit is initialized, or it is read too late.
     #[cfg(target_os = "linux")]
-    if std::env::var_os("WORKBENCH_WEBKIT_DMABUF").is_none() {
-        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    match std::env::var("WORKBENCH_WEBKIT_DMABUF").as_deref() {
+        Ok("0") => std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1"),
+        Ok(_) => {}
+        Err(_) => {
+            if std::env::var_os("WEBKIT_SKIA_ENABLE_CPU_RENDERING").is_none() {
+                std::env::set_var("WEBKIT_SKIA_ENABLE_CPU_RENDERING", "1");
+            }
+        }
     }
     let args: Vec<String> = std::env::args().skip(1).collect();
     let flag = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();

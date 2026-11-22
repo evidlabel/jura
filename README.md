@@ -129,6 +129,7 @@ Needs `evid` and `did` on PATH (`$WORKBENCH_EVID_BIN` / `$WORKBENCH_DID_BIN` ove
 | `WORKBENCH_AGENTS` | shipped `agents.toml` | harness buttons. A button shows when its program is on PATH. `~/.config/workbench/agents.toml` replaces the shipped list when that file exists. A row may set `env` for one config (e.g. an opencode profile), and one harness may be listed several times. A case can list its own rows under `agents:` in `workbench.yml`; they come first and replace the catalogue by name. |
 | `WORKBENCH_SKILLS` | case `skills.dirs`, else shipped `skills.toml` | one directory that replaces the skill directories. A case lists its own directories under `skills.dirs` in `workbench.yml`. With no `dirs` key, `~/.config/workbench/skills.toml` replaces the shipped list (claude, grok, hermes, codex) when that file exists. |
 | `WORKBENCH_SANDBOX` | `1` | `0` turns the sandbox off (each terminal shows it) |
+| `WORKBENCH_WEBKIT_DMABUF` | (unset) | how the app window renders (Linux). Unset: WebKit's DMA-BUF path with CPU rasterization, which keeps typing quick with the preview open. `1`: rasterize on the GPU as well (fastest, but it has crashed WebKitGTK 2.52 on Intel/Wayland). `0`: no DMA-BUF, which is slow in a large window. |
 
 ## Discover
 
