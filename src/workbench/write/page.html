@@ -3715,7 +3715,12 @@ function pvSendBuffer(force) {
     const text = docText();
     if (!force && text === ws.sent) return;
     if (ws.compiling || ws.bufferedAmount > 0) { W.pv.dirty = true; return; }
-    ws.compiling = true; W.pv.dirty = false;
+    // tinymist answers with a compile status only when the text differs from what it has: the first
+    // copy of an unchanged file gets none, so it is not waited for (that wait would stop all updates)
+    const answer = !(ws.sent == null && S.file.original != null && text === S.file.original);
+    ws.compiling = answer; W.pv.dirty = false;
+    clearTimeout(ws.stuckT);
+    if (answer) ws.stuckT = setTimeout(() => pvCompileDone(ws), PV_STUCK);  // a lost answer must not stall the preview
     ws.send(JSON.stringify({ event: 'updateMemoryFiles', files: { [absPath(ws.path)]: text } }));
     ws.sent = text;
   } else if (force || ws.sent != null) {
@@ -3723,11 +3728,25 @@ function pvSendBuffer(force) {
     ws.sent = null;
   }
 }
+// Every scroll costs the preview a render on this window's main thread (~0.1 s for a long document,
+// more in the app's WebKit), so it waits for a pause in typing and is sent only when the caret's line
+// moved. A click in the editor always syncs.
+const PV_IDLE = 1000;  // ms without typing before the preview scrolls (or, After typing, recompiles)
+const PV_STUCK = 10000;  // ms to wait for tinymist's compile status before sending again
+function pvScrollLater(force) {
+  clearTimeout(W.pv.scrollT);
+  if (force && W.pv.ws) W.pv.ws.scrolledLine = 0;
+  const typing = PV_IDLE - (performance.now() - (W.pv.typedAt || -1e9));
+  W.pv.scrollT = setTimeout(pvScroll, Math.max(250, typing));
+}
 function pvScroll() {
   const ws = W.pv.ws;
   if (!W.panes.preview || document.hidden || W.pv.sendT || !ws || ws.compiling || ws.readyState !== 1 || !S.file || S.file.path !== W.pv.path) return;
-  const v = docText().slice(0, editor.selectionStart);
-  ws.send(JSON.stringify({ event: 'panelScrollTo', filepath: absPath(S.file.path), line: v.split('\n').length - 1, character: v.length - v.lastIndexOf('\n') - 1 }));
+  if (performance.now() - (W.pv.typedAt || -1e9) < PV_IDLE) { pvScrollLater(false); return; }  // typing resumed
+  const at = editor.selectionStart, line = editor.view.state.doc.lineAt(at);
+  if (ws.scrolledLine === line.number) return;  // the preview is already there
+  ws.scrolledLine = line.number;
+  ws.send(JSON.stringify({ event: 'panelScrollTo', filepath: absPath(S.file.path), line: line.number - 1, character: at - line.from }));
 }
 function mdSend() {
   if (!W.panes.preview || !S.file || !/\.(md|markdown)$/i.test(S.file.path)) return;
@@ -3749,6 +3768,7 @@ window.addEventListener('message', e => {
   }
 });
 function pvCompileDone(ws) {
+  clearTimeout(ws.stuckT);
   ws.compiling = false;
   if (W.pv.ws === ws && W.pv.dirty && !W.pv.sendT) pvScheduleBuffer();
 }
@@ -3763,10 +3783,11 @@ function pvScheduleBuffer() {
   if (S.file && /\.typ$/i.test(S.file.path) && $('#pv-refresh-mode').value === 'save') return;
   // Compilation and iframe painting compete with editing. Wait for a pause,
   // and keep only the latest buffer if tinymist is still compiling.
-  W.pv.sendT = setTimeout(() => { W.pv.sendT = null; pvSendBuffer(); }, 400);
+  W.pv.sendT = setTimeout(() => { W.pv.sendT = null; pvSendBuffer(); }, PV_IDLE);
 }
-editor.addEventListener('input', pvScheduleBuffer);
-['keyup', 'click'].forEach(ev => editor.addEventListener(ev, () => { clearTimeout(W.pv.scrollT); W.pv.scrollT = setTimeout(pvScroll, 250); }));
+editor.addEventListener('input', () => { W.pv.typedAt = performance.now(); pvScheduleBuffer(); });
+editor.addEventListener('keyup', () => pvScrollLater(false));
+editor.addEventListener('click', () => pvScrollLater(true));
 $('#pv-reload').onclick = () => {
   if (S.file && /\.(md|markdown)$/i.test(S.file.path)) { mdSend(); return; }
   if (W.pv.data && pvLive(W.pv.ws)) { pvSendBuffer(true); pvRefreshFrame(); return; }
