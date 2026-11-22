@@ -228,7 +228,7 @@ app = cli(
         ),
         cli(
             name="setup",
-            help="Install what doctor finds missing or too old: evid and did (uv), git and bwrap (your package manager, with sudo), typst and tinymist (~/.local/bin), did's language models. Asks before each step.",
+            help="Install what doctor finds missing or too old: evid and did (uv), git and bwrap (your package manager, with sudo), typst and tinymist (~/.local/bin), workbench-app (~/.local/bin; its webkit2gtk runtime libraries with sudo, asked separately), did's language models. Asks before each step.",
             callback=setup,
             options=[
                 option(flags=["--yes", "-y"], flag=True, help="run every step without asking, except the ones that need sudo (printed instead)"),

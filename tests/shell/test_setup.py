@@ -23,6 +23,35 @@ def test_plan_nothing_missing():
     assert setup.plan({}, uv=True, manager="apt-get", arch="x86_64", tinymist=False) == []
 
 
+def test_plan_app_download_step():
+    (app,) = setup.plan({}, uv=True, manager="", arch="x86_64", tinymist=False, app=True)
+    assert app.tool == "workbench-app" and not app.sudo
+    assert app.url == f"https://github.com/evidlabel/jura/releases/download/app-v{setup.APP}/workbench-app-x86_64.tar.xz"
+    assert "make app-build" in app.what
+
+
+def test_plan_app_unknown_arch_advises():
+    (app,) = setup.plan({}, uv=True, manager="apt-get", arch="riscv64", tinymist=False, app=True)
+    assert not app.runnable and "riscv64" in app.what and "make app-build" in app.what
+
+
+def test_plan_app_runtime_libs_first_with_sudo():
+    webkit, app = setup.plan({}, uv=True, manager="apt-get", arch="x86_64", tinymist=False, app=True, webkit=True)
+    assert webkit.sudo and "libwebkit2gtk-4.1-0" in webkit.argv and webkit.argv[:2] == ("sudo", "apt-get")
+    assert app.tool == "workbench-app" and app.url and not app.sudo
+
+
+def test_plan_app_runtime_libs_without_a_known_advisor():
+    webkit, app = setup.plan({}, uv=True, manager="zypper", arch="x86_64", tinymist=False, app=True, webkit=True)
+    assert not webkit.runnable and "webkit2gtk-4.1" in webkit.what
+    assert app.tool == "workbench-app" and app.url
+
+
+def test_plan_app_no_runtime_step_when_libs_present():
+    (app,) = setup.plan({}, uv=True, manager="apt-get", arch="x86_64", tinymist=False, app=True, webkit=False)
+    assert [s.tool for s in (app,)] == ["workbench-app"]
+
+
 def test_plan_everything_missing_on_apt():
     missing = {n: f"{n} is not installed" for n in ("evid", "did", "typst", "git", "bwrap")}
     steps = setup.plan(missing, uv=True, manager="apt-get", arch="x86_64", languages=("da", "en"))
@@ -61,8 +90,12 @@ def test_plan_arm():
     assert "typst-aarch64-unknown-linux-musl" in typst.url and tinymist.url.endswith("linux-arm64")
 
 
-def test_setup_yes_never_runs_sudo(monkeypatch, capsys):
+def test_setup_yes_never_runs_sudo(monkeypatch, capsys, tmp_path):
     ran = []
+    exe = tmp_path / "workbench-app"  # the app: found, so no app step
+    exe.touch()  # the app: found, so no app step
+    exe.chmod(0o755)
+    monkeypatch.setenv("WORKBENCH_APP", str(exe))
     monkeypatch.setattr(setup, "_missing", lambda: {"bwrap": "bwrap is not installed"})
     monkeypatch.setattr(setup, "package_manager", lambda: "apt-get")
     monkeypatch.setattr(setup.requires, "check", lambda n: type("T", (), {"problem": "x"})())  # did missing: no models step
@@ -70,6 +103,21 @@ def test_setup_yes_never_runs_sudo(monkeypatch, capsys):
     monkeypatch.setattr("workbench.write.preview.find_tinymist", lambda: "/x/tinymist")
     setup.run(yes=True)
     assert ran == [] and "needs sudo: not run under --yes" in capsys.readouterr().out
+
+
+def test_setup_yes_downloads_the_app(monkeypatch, capsys):
+    ran = []
+    monkeypatch.setattr(setup, "_missing", lambda: {})
+    monkeypatch.setattr(setup, "package_manager", lambda: "apt-get")
+    monkeypatch.setattr(setup.requires, "check", lambda n: type("T", (), {"problem": "x"})())  # did missing: no models step
+    monkeypatch.setattr(setup, "_do", ran.append)
+    monkeypatch.setattr("workbench.server.find_app", lambda: None)  # no app: the download step runs under --yes
+    monkeypatch.setattr(setup, "webkit_runtime", lambda: True)
+    monkeypatch.setattr("workbench.write.preview.find_tinymist", lambda: "/x/tinymist")
+    setup.run(yes=True)
+    out = capsys.readouterr().out
+    assert [s.tool for s in ran] == ["workbench-app"]
+    assert "webkit2gtk runtime" in out and "needs sudo: not run under --yes" in out
 
 
 # ---------- templates ----------
